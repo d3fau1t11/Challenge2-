@@ -17,8 +17,9 @@ export async function POST(req: Request) {
     } else {
       return NextResponse.json({ error: "Failed to delete story from database" }, { status: 500 });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error in /api/delete-story:", error);
-    return NextResponse.json({ error: error?.message || "Internal server error" }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : "Internal server error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
