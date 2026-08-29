@@ -31,6 +31,8 @@ export default async function StoryPage({ params }: PageProps) {
       founder_name: "Dawit Alemu",
       voice_url: "", // will use a mock speech audio player fallback if empty
       video_url: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+            media: [{ url: "https://storage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4", type: "video" as const }],
+      ai_source: "fallback" as const,
       amharic_transcript: "ሰላም፣ ስሜ ዳዊት አሊሙ እባላለሁ። በአዲስ አበባ የልብስ ስፌት አውደ ጥናት አለኝ። በቅርቡ በነበረን ድጋፍ ስራችንን አስፋፍተን አሁን 9 ሰራተኞች አሉን።",
       english_translation: "Hello, my name is Dawit Alemu. I have a garment workshop in Addis Ababa. With the recent support, we expanded our work and now have 9 employees.",
       generated_story: "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. Thanks to the support of our donors, we have grown our workshop and successfully hit our milestone of employing 9 local garment workers. This provides decent wages, healthcare support, and stability to 9 families in our community. We are incredibly grateful for the opportunity to show our workshop, our machines, and the dedication of our employees.",
