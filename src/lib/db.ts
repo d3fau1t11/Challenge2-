@@ -13,12 +13,19 @@ export interface Certificate {
   hash: string;
 }
 
+export interface MediaItem {
+  url: string;
+  type: "video" | "image";
+}
+
 export interface Story {
   id: string;
   certificate_id: string;
   founder_name: string;
   voice_url: string;
   video_url: string;
+  media: MediaItem[];
+  ai_source: "live" | "fallback";
   amharic_transcript: string;
   english_translation: string;
   generated_story: string;
@@ -250,7 +257,11 @@ export const db = {
     }
   },
 
-  updateConsent: async (id: string, revoked: boolean, permissions: any): Promise<Consent | null> => {
+  updateConsent: async (
+    id: string,
+    revoked: boolean,
+    permissions: Consent["permissions"]
+  ): Promise<Consent | null> => {
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase
         .from('consents')

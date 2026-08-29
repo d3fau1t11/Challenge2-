@@ -1,131 +1,140 @@
 // Addis AI API helper
+// Every call reports whether it actually reached the API, so the UI can be
+// honest about it rather than silently showing canned text as if it were real.
 const ADDIS_AI_BASE = "https://api.addisassistant.com";
+
+export interface AiResult {
+  text: string;
+  live: boolean;
+}
+
+const FALLBACK_TRANSCRIPT =
+  "ሰላም፣ ስሜ ዳዊት አሊሙ እባላለሁ። በአዲስ አበባ የልብስ ስፌት አውደ ጥናት አለኝ። በቅርቡ በነበረን ድጋፍ ስራችንን አስፋፍተን አሁን 9 ሰራተኞች አሉን።";
+
+const FALLBACK_TRANSLATION =
+  "Hello, my name is Dawit Alemu. I have a garment workshop in Addis Ababa. With the recent support, we expanded our work and now have 9 employees.";
+
+const FALLBACK_STORY =
+  "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. Thanks to the support of our donors, we have grown our workshop and reached our milestone of employing 9 local garment workers. This provides decent wages and stability to 9 families in our community.";
 
 export const addisai = {
   /**
-   * Speech-to-text transcribe Amharic voice note
+   * Speech-to-text: Amharic or Afaan Oromo voice note to text
    */
-  transcribe: async (audioBuffer: Buffer, mimeType: string): Promise<string> => {
+  transcribe: async (
+    audioBuffer: Buffer,
+    mimeType: string,
+    languageCode: string = "am"
+  ): Promise<AiResult> => {
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
-      console.warn("ADDIS_AI_API_KEY is not set. Returning fallback mock transcription.");
-      return "ሰላም፣ ስሜ ዳዊት አሊሙ እባላለሁ። በአዲስ አበባ የልብስ ስፌት አውደ ጥናት አለኝ። በቅርቡ በነበረን ድጋፍ ስራችንን አስፋፍተን አሁን 9 ሰራተኞች አሉን።";
+      console.warn("ADDIS_AI_API_KEY is not set. Using fallback transcript.");
+      return { text: FALLBACK_TRANSCRIPT, live: false };
     }
 
     try {
-      const url = `${ADDIS_AI_BASE}/api/v2/stt`;
       const formData = new FormData();
-      
-      // Convert buffer to Blob
-      const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType });
+      const blob = new Blob([new Uint8Array(audioBuffer)], { type: mimeType || "audio/wav" });
       formData.append("audio", blob, "voice.wav");
-      formData.append("request_data", JSON.stringify({ language_code: "am" }));
+      formData.append("request_data", JSON.stringify({ language_code: languageCode }));
 
       console.log("Calling Addis AI STT...");
-      const res = await fetch(url, {
+      const res = await fetch(`${ADDIS_AI_BASE}/api/v2/stt`, {
         method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-        },
+        headers: { "x-api-key": apiKey },
         body: formData,
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Addis AI STT failed with status ${res.status}: ${errorText}`);
+        throw new Error(`Addis AI STT failed with status ${res.status}: ${await res.text()}`);
       }
 
       const json = await res.json();
       console.log("Addis AI STT Response:", JSON.stringify(json));
-      
-      // STT returns either response_text, text, or data.transcription/transcript
-      const text = json.response_text || json.text || (json.data && (json.data.transcription || json.data.transcript)) || "";
-      if (!text) {
-        throw new Error("Could not extract transcript from Addis AI STT response");
-      }
-      return text;
+
+      const text =
+        json.response_text ||
+        json.text ||
+        (json.data && (json.data.transcription || json.data.transcript || json.data.response_text)) ||
+        "";
+
+      if (!text) throw new Error("Could not extract transcript from Addis AI STT response");
+      return { text, live: true };
     } catch (error) {
       console.error("Error during Addis AI STT:", error);
-      // Fallback for hackathon safety
-      return "ሰላም፣ ስሜ ዳዊት አሊሙ እባላለሁ። በአዲስ አበባ የልብስ ስፌት አውደ ጥናት አለኝ። በቅርቡ በነበረን ድጋፍ ስራችንን አስፋፍተን አሁን 9 ሰራተኞች አሉን።";
+      return { text: FALLBACK_TRANSCRIPT, live: false };
     }
   },
 
   /**
-   * Translate text from Amharic to English
+   * Translate Amharic text to English
    */
-  translate: async (text: string): Promise<string> => {
+  translate: async (text: string, sourceLanguage: string = "am"): Promise<AiResult> => {
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
-      console.warn("ADDIS_AI_API_KEY is not set. Returning fallback mock translation.");
-      return "Hello, my name is Dawit Alemu. I have a garment workshop in Addis Ababa. With the recent support, we expanded our work and now have 9 employees.";
+      console.warn("ADDIS_AI_API_KEY is not set. Using fallback translation.");
+      return { text: FALLBACK_TRANSLATION, live: false };
     }
 
     try {
-      const url = `${ADDIS_AI_BASE}/api/v1/translate`;
       console.log("Calling Addis AI Translate...");
-      const res = await fetch(url, {
+      const res = await fetch(`${ADDIS_AI_BASE}/api/v1/translate`, {
         method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "Content-Type": "application/json",
-        },
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
           text,
-          source_language: "am",
+          source_language: sourceLanguage,
           target_language: "en",
         }),
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Addis AI Translate failed with status ${res.status}: ${errorText}`);
+        throw new Error(`Addis AI Translate failed with status ${res.status}: ${await res.text()}`);
       }
 
       const json = await res.json();
       console.log("Addis AI Translate Response:", JSON.stringify(json));
-      
-      const translation = (json.data && json.data.translation) || json.translation || json.response_text || "";
-      if (!translation) {
-        throw new Error("Could not extract translation from Addis AI response");
-      }
-      return translation;
+
+      const translation =
+        (json.data && (json.data.translation || json.data.response_text)) ||
+        json.translation ||
+        json.response_text ||
+        "";
+
+      if (!translation) throw new Error("Could not extract translation from Addis AI response");
+      return { text: translation, live: true };
     } catch (error) {
       console.error("Error during Addis AI translation:", error);
-      return "Hello, my name is Dawit Alemu. I have a garment workshop in Addis Ababa. With the recent support, we expanded our work and now have 9 employees.";
+      return { text: FALLBACK_TRANSLATION, live: false };
     }
   },
 
   /**
-   * Clean up and generate a beautiful, respectful story using chat completion
+   * Turn the raw transcript into a short, respectful donor-facing story
    */
-  generateStory: async (englishTranscript: string, milestone: string): Promise<string> => {
+  generateStory: async (englishTranscript: string, milestone: string): Promise<AiResult> => {
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
-      console.warn("ADDIS_AI_API_KEY is not set. Returning fallback mock story.");
-      return "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. Thanks to the support of our donors, we have grown our workshop and successfully hit our milestone of employing 9 local garment workers. This provides decent wages, healthcare support, and stability to 9 families in our community. We are incredibly grateful for the opportunity to show our workshop, our machines, and the dedication of our employees.";
+      console.warn("ADDIS_AI_API_KEY is not set. Using fallback story.");
+      return { text: FALLBACK_STORY, live: false };
     }
 
     try {
-      const url = `${ADDIS_AI_BASE}/api/v1/chat_generate`;
-      const prompt = `You are a respectful, empathetic impact storytelling copywriter. 
-Below is a translated transcript of a garment workshop founder in Addis Ababa, and the verified milestone they reached.
-Please rewrite this transcript and milestone into a concise, respectful, and emotional story (approx 3-4 sentences) suitable for a donor-facing landing page.
-Use first-person perspective of the founder. Focus on human connection, Decent Work (SDG 8), and gratitude.
-Write the story strictly in English. Do not write in Amharic.
+      const prompt = `You are a respectful, empathetic impact storytelling copywriter.
+Below is a translated transcript from a workshop founder in Ethiopia, and the verified milestone they reached.
+Rewrite this into a concise, respectful, emotional story of about 3-4 sentences suitable for a donor-facing page.
+Use the first-person perspective of the founder. Focus on human connection, Decent Work (SDG 8), and gratitude.
+Write strictly in English. Do not invent facts that are not in the transcript or the milestone.
 
-Founder Transcript: "${englishTranscript}"
-Verified Milestone: "${milestone}"
+Founder transcript: "${englishTranscript}"
+Verified milestone: "${milestone}"
 
-Polished Story:`;
+Polished story:`;
 
       console.log("Calling Addis AI Story Generator...");
-      const res = await fetch(url, {
+      const res = await fetch(`${ADDIS_AI_BASE}/api/v1/chat_generate`, {
         method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "Content-Type": "application/json",
-        },
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [{ role: "user", content: prompt }],
           temperature: 0.7,
@@ -134,49 +143,49 @@ Polished Story:`;
       });
 
       if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`Addis AI story generation failed with status ${res.status}: ${errorText}`);
+        throw new Error(`Addis AI story generation failed with status ${res.status}`);
       }
 
       const json = await res.json();
       console.log("Addis AI Chat Response:", JSON.stringify(json));
-      return (json.data && json.data.response_text) || json.response_text || json.text || "";
+
+      const text =
+        (json.data && json.data.response_text) || json.response_text || json.text || "";
+
+      if (!text) throw new Error("Empty story response");
+      return { text, live: true };
     } catch (error) {
       console.error("Error generating story:", error);
-      return "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. Thanks to the support of our donors, we have grown our workshop and successfully hit our milestone of employing 9 local garment workers. This provides decent wages, healthcare support, and stability to 9 families in our community. We are incredibly grateful for the opportunity to show our workshop, our machines, and the dedication of our employees.";
+      return { text: FALLBACK_STORY, live: false };
     }
   },
 
   /**
-   * Generate simple subtitle cues from translation
+   * Break the translation into timed subtitle cues across the real clip length
    */
-  generateCaptions: async (englishTranslation: string, durationSeconds: number = 15): Promise<Array<{ start: number; end: number; text: string }>> => {
+  generateCaptions: async (
+    englishTranslation: string,
+    durationSeconds: number = 15
+  ): Promise<Array<{ start: number; end: number; text: string }>> => {
     const apiKey = process.env.ADDIS_AI_API_KEY;
-    if (!apiKey) {
-      // Return simple evenly spaced captions
-      return splitTextToCaptions(englishTranslation, durationSeconds);
-    }
+    if (!apiKey) return splitTextToCaptions(englishTranslation, durationSeconds);
 
     try {
-      const url = `${ADDIS_AI_BASE}/api/v1/chat_generate`;
-      const prompt = `You are an assistant that formats subtitles.
-Take the following English translation of a speaker and break it down into a JSON array of timed subtitles.
-Each subtitle must contain "start" (seconds), "end" (seconds), and "text" (the subtitle content).
-Keep the segment lengths short (approx 3-7 words per subtitle).
-The total duration of the audio is ${durationSeconds} seconds. Distribute the subtitles evenly from 0 to ${durationSeconds}.
-Return ONLY a valid JSON array, with no other text, comments, markdown blocks, or formatting.
+      const prompt = `You format subtitles.
+Break the following English text into a JSON array of timed subtitles.
+Each item must have "start" (seconds), "end" (seconds), and "text".
+Keep each cue to roughly 3-7 words.
+The audio is ${Math.round(durationSeconds)} seconds long. Distribute cues evenly from 0 to ${Math.round(durationSeconds)}.
+Return ONLY a valid JSON array — no markdown, no commentary.
 
-Translation: "${englishTranslation}"
+Text: "${englishTranslation}"
 
-JSON Array Output:`;
+JSON array:`;
 
       console.log("Calling Addis AI Subtitle Generator...");
-      const res = await fetch(url, {
+      const res = await fetch(`${ADDIS_AI_BASE}/api/v1/chat_generate`, {
         method: "POST",
-        headers: {
-          "x-api-key": apiKey,
-          "Content-Type": "application/json",
-        },
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: [{ role: "user", content: prompt }],
           temperature: 0.2,
@@ -184,42 +193,43 @@ JSON Array Output:`;
         }),
       });
 
-      if (!res.ok) {
-        throw new Error(`Addis AI subtitle generation failed with status ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Subtitle generation failed with status ${res.status}`);
 
       const json = await res.json();
-      const textResponse = (json.data && json.data.response_text) || json.response_text || json.text || "";
-      // Strip markdown code block wrappers if any
+      const textResponse =
+        (json.data && json.data.response_text) || json.response_text || json.text || "";
+
       const cleaned = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
-      return JSON.parse(cleaned);
+      const parsed = JSON.parse(cleaned);
+
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error("Bad caption shape");
+      return parsed;
     } catch (error) {
-      console.error("Error generating timed captions via AI, falling back to heuristic:", error);
+      console.error("Caption generation failed, using heuristic split:", error);
       return splitTextToCaptions(englishTranslation, durationSeconds);
     }
-  }
+  },
 };
 
-// Heuristic fallback for dividing text into captions
-function splitTextToCaptions(text: string, duration: number): Array<{ start: number; end: number; text: string }> {
-  const words = text.split(" ");
+function splitTextToCaptions(
+  text: string,
+  duration: number
+): Array<{ start: number; end: number; text: string }> {
+  const words = text.split(" ").filter(Boolean);
   const wordsPerCue = 6;
   const cues: Array<{ start: number; end: number; text: string }> = [];
-  
-  let currentStart = 0;
-  const numCues = Math.ceil(words.length / wordsPerCue);
+
+  const numCues = Math.max(1, Math.ceil(words.length / wordsPerCue));
   const timePerCue = duration / numCues;
 
+  let currentStart = 0;
   for (let i = 0; i < words.length; i += wordsPerCue) {
     const cueWords = words.slice(i, i + wordsPerCue).join(" ");
     const start = parseFloat(currentStart.toFixed(1));
-    const end = parseFloat((currentStart + timePerCue).toFixed(1));
-    cues.push({
-      start,
-      end: end > duration ? duration : end,
-      text: cueWords
-    });
+    const end = parseFloat(Math.min(currentStart + timePerCue, duration).toFixed(1));
+    cues.push({ start, end, text: cueWords });
     currentStart += timePerCue;
   }
+
   return cues;
 }
