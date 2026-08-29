@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mic, Square, Video, Plus, BarChart2, Shield, ArrowRight, CheckCircle2, Loader2, Upload } from "lucide-react";
+import { Video, BarChart2, Shield, ArrowRight, CheckCircle2, Loader2, Upload, Image as ImageIcon, Music, X } from "lucide-react";
+import { extractAudioFromVideo, getMediaDuration } from "@/lib/extractAudio";
 
 export default function FounderPage() {
   const router = useRouter();
@@ -10,151 +11,142 @@ export default function FounderPage() {
   const [milestone, setMilestone] = useState("9 employees");
   const [language, setLanguage] = useState("am");
 
-  // Audio state
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  // Media state — all uploads, no recording
   const [audioFile, setAudioFile] = useState<File | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
-  // Video state
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreview, setVideoPreview] = useState<string | null>(null);
+
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoPreviews, setPhotoPreviews] = useState<string[]>([]);
 
   // Consent state
   const [consentDawit, setConsentDawit] = useState(true);
   const [consentSelam, setConsentSelam] = useState(true);
 
-  // Submission/Progress state
+  // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExtracting, setIsExtracting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   const steps = [
     "Uploading media to secure off-chain storage...",
-    "Transcribing Dawit's Amharic voice note...",
+    "Transcribing the Amharic voice note...",
     "Translating transcription to English...",
-    "NVIDIA Nemotron analyzing workshop video...",
-    "Structuring respectful human story...",
-    "Generating English captions and finalized link..."
+    "Structuring a respectful human story...",
+    "Generating captions and the shareable link...",
   ];
 
-  // Start recording audio
-  const startRecording = async () => {
-    setError(null);
-    audioChunksRef.current = [];
-    setAudioFile(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
-        setAudioBlob(audioBlob);
-        setAudioUrl(URL.createObjectURL(audioBlob));
-        // Stop all tracks in stream
-        stream.getTracks().forEach((track) => track.stop());
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (err) {
-      console.error("Microphone access denied:", err);
-      setError("Microphone access denied. Please upload a voice note file instead.");
-    }
-  };
-
-  // Stop recording audio
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  // Audio file selection
   const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setError("Audio file is too large (max 10MB).");
-        return;
-      }
-      setAudioFile(file);
-      setAudioBlob(null);
-      setAudioUrl(URL.createObjectURL(file));
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      setError("Audio file is too large (max 25MB).");
+      return;
     }
+    setAudioFile(file);
+    setAudioUrl(URL.createObjectURL(file));
   };
 
-  // Video file selection
   const handleVideoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
     const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 50 * 1024 * 1024) {
-        setError("Video file is too large (max 50MB).");
-        return;
-      }
-      setVideoFile(file);
-      setVideoPreview(URL.createObjectURL(file));
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) {
+      setError("Video file is too large (max 50MB).");
+      return;
     }
+    setVideoFile(file);
+    setVideoPreview(URL.createObjectURL(file));
   };
 
-  // Submit flow
+  const handlePhotoFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setError(null);
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const tooBig = files.find((f) => f.size > 10 * 1024 * 1024);
+    if (tooBig) {
+      setError(`"${tooBig.name}" is too large (max 10MB per photo).`);
+      return;
+    }
+    if (photoFiles.length + files.length > 6) {
+      setError("Up to 6 photos.");
+      return;
+    }
+
+    setPhotoFiles((prev) => [...prev, ...files]);
+    setPhotoPreviews((prev) => [...prev, ...files.map((f) => URL.createObjectURL(f))]);
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+    setPhotoPreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
-    const voice = audioBlob || audioFile;
+    // The voice is the story. Everything downstream depends on it.
+    // If no audio file was uploaded, pull the track out of the video.
+    let voice: Blob | File | null = audioFile;
+    let voiceFileName = audioFile ? audioFile.name : "voice.wav";
+
+    if (!voice && videoFile) {
+      setIsExtracting(true);
+      try {
+        voice = await extractAudioFromVideo(videoFile);
+        voiceFileName = "extracted.wav";
+      } catch (err) {
+        console.error("Audio extraction failed:", err);
+        setIsExtracting(false);
+        setError("Could not read audio from that video. Please upload an audio file as well.");
+        return;
+      }
+      setIsExtracting(false);
+    }
+
     if (!voice) {
-      setError("Please record a voice note or upload an audio file.");
+      setError("Please upload a voice note, or a video with the founder speaking in it.");
       return;
     }
-    if (!videoFile) {
-      setError("Please upload a workshop video file.");
+
+    if (!videoFile && photoFiles.length === 0) {
+      setError("Please add at least one photo or a video of the workshop.");
       return;
     }
+
+    // Time the captions against the real media length
+    const duration = videoFile
+      ? await getMediaDuration(videoFile, "video")
+      : audioFile
+      ? await getMediaDuration(audioFile, "audio")
+      : 15;
 
     setIsSubmitting(true);
     setCurrentStep(0);
 
-    // Simulate progress milestones alongside the API call
     const progressInterval = setInterval(() => {
-      setCurrentStep((prev) => {
-        if (prev < steps.length - 1) {
-          return prev + 1;
-        }
-        return prev;
-      });
+      setCurrentStep((prev) => (prev < steps.length - 1 ? prev + 1 : prev));
     }, 2500);
 
     try {
       const formData = new FormData();
-      if (audioBlob) {
-        formData.append("voice", audioBlob, "voice.wav");
-      } else if (audioFile) {
-        formData.append("voice", audioFile);
-      }
-      formData.append("video", videoFile);
+      formData.append("voice", voice, voiceFileName);
+      if (videoFile) formData.append("video", videoFile);
+      photoFiles.forEach((p) => formData.append("photos", p));
+      formData.append("duration", String(duration));
       formData.append("milestone", milestone);
       formData.append("founderName", founderName);
+      formData.append("language", language);
       formData.append("consentDawit", String(consentDawit));
       formData.append("consentSelam", String(consentSelam));
 
-      const res = await fetch("/api/generate-story", {
-        method: "POST",
-        body: formData,
-      });
-
+      const res = await fetch("/api/generate-story", { method: "POST", body: formData });
       clearInterval(progressInterval);
 
       if (!res.ok) {
@@ -163,17 +155,12 @@ export default function FounderPage() {
       }
 
       const data = await res.json();
-      setCurrentStep(steps.length); // complete all steps
-      
-      // Redirect to the newly generated story page
-      setTimeout(() => {
-        router.push(`/story/${data.storyId}`);
-      }, 1000);
-
-    } catch (err: any) {
+      setCurrentStep(steps.length);
+      setTimeout(() => router.push(`/story/${data.storyId}`), 1000);
+    } catch (err) {
       clearInterval(progressInterval);
       setIsSubmitting(false);
-      setError(err.message || "An error occurred while generating the story.");
+      setError(err instanceof Error ? err.message : "An error occurred while generating the story.");
     }
   };
 
@@ -192,7 +179,7 @@ export default function FounderPage() {
             Processing your story...
           </h2>
           <p className="text-slate-400 text-sm">
-            AI is analyzing your off-chain materials to construct a premium storytelling experience.
+            AI is analyzing your off-chain materials to construct the storytelling experience.
           </p>
 
           <div className="space-y-4 pt-6 text-left">
@@ -226,17 +213,17 @@ export default function FounderPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-12 px-4 sm:px-6">
       <div className="max-w-xl w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-3xl p-6 sm:p-10 shadow-2xl space-y-8">
-        
-        {/* Header */}
+
         <div className="space-y-2 text-center sm:text-left">
           <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs px-3 py-1 rounded-full font-medium">
             <Shield className="w-3.5 h-3.5" /> Off-Chain Storytelling Layer
           </div>
           <h1 className="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-white via-indigo-200 to-indigo-400">
-            Tell Your Story
+            ታሪክዎን ያጋሩ
           </h1>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Dawit, let's create a beautiful storytelling link that connects directly to the anonymous impact certificate. Let donors see the human side of your workshop.
+            Upload a voice note and a few photos of the workshop. We turn it into a story that
+            sits behind the anonymous impact certificate.
           </p>
         </div>
 
@@ -247,10 +234,12 @@ export default function FounderPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Founder Metadata */}
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">Founder Name</label>
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                Founder name / ስም
+              </label>
               <input
                 type="text"
                 value={founderName}
@@ -261,21 +250,23 @@ export default function FounderPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">Language</label>
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                Spoken language / ቋንቋ
+              </label>
               <select
                 value={language}
                 onChange={(e) => setLanguage(e.target.value)}
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               >
                 <option value="am">Amharic (አማርኛ)</option>
+                <option value="om">Afaan Oromo</option>
                 <option value="en">English</option>
               </select>
             </div>
           </div>
 
-          {/* Milestone Input */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 block">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
               <BarChart2 className="w-4 h-4 text-indigo-400" /> What changed? (Milestone)
             </label>
             <input
@@ -288,85 +279,102 @@ export default function FounderPage() {
             />
           </div>
 
-          {/* Voice Note Input */}
+          {/* Voice note — required */}
           <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-              🎙 Dawit's Voice Note (Amharic)
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Music className="w-4 h-4 text-indigo-400" /> Voice note / የድምፅ መልእክት
+              <span className="text-rose-400 normal-case font-normal tracking-normal">required</span>
             </label>
-            
-            <div className="flex flex-col sm:flex-row gap-4 items-center bg-slate-950 border border-slate-800/80 rounded-2xl p-4">
-              <button
-                type="button"
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all ${
-                  isRecording 
-                    ? "bg-rose-500 text-white animate-pulse" 
-                    : "bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20"
-                }`}
-              >
-                {isRecording ? (
-                  <>
-                    <Square className="w-4 h-4" /> Stop Recording
-                  </>
-                ) : (
-                  <>
-                    <Mic className="w-4 h-4" /> Record Live Note
-                  </>
-                )}
-              </button>
 
-              <div className="text-slate-500 text-sm font-medium">OR</div>
+            <input
+              type="file"
+              accept="audio/*"
+              onChange={handleAudioFileChange}
+              className="hidden"
+              id="audio-upload"
+            />
+            <label
+              htmlFor="audio-upload"
+              className="w-full border border-slate-800 border-dashed rounded-2xl px-4 py-5 text-sm text-slate-400 hover:text-white flex items-center justify-center gap-2 cursor-pointer hover:border-slate-700 transition-colors bg-slate-950"
+            >
+              <Upload className="w-4 h-4" /> {audioFile ? audioFile.name : "Upload an audio file"}
+            </label>
 
-              <div className="w-full relative">
-                <input
-                  type="file"
-                  accept="audio/*"
-                  onChange={handleAudioFileChange}
-                  className="hidden"
-                  id="audio-upload"
-                />
-                <label
-                  htmlFor="audio-upload"
-                  className="w-full border border-slate-800 border-dashed rounded-xl px-4 py-2.5 text-xs text-slate-400 hover:text-white flex items-center justify-center gap-2 cursor-pointer hover:border-slate-700 transition-colors"
-                >
-                  <Upload className="w-4 h-4" /> {audioFile ? audioFile.name : "Upload audio file"}
-                </label>
-              </div>
-            </div>
+            <p className="text-[11px] text-slate-500 leading-relaxed px-1">
+              If you upload a video with the founder speaking, we take the audio from it and
+              you can leave this empty.
+            </p>
 
-            {audioUrl && (
-              <div className="px-1">
-                <audio src={audioUrl} controls className="w-full h-10 rounded-lg" />
-              </div>
-            )}
+            {audioUrl && <audio src={audioUrl} controls className="w-full h-10 rounded-lg" />}
           </div>
 
-          {/* Video Input */}
+          {/* Photos */}
           <div className="space-y-3">
-            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
-              🎥 Add Workshop Video / Burst
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <ImageIcon className="w-4 h-4 text-indigo-400" /> Workshop photos / ፎቶዎች
             </label>
-            <div className="border border-slate-800 border-dashed rounded-2xl bg-slate-950 p-6 text-center hover:border-slate-700 transition-colors relative">
-              <input
-                type="file"
-                accept="video/*"
-                onChange={handleVideoFileChange}
-                className="hidden"
-                id="video-upload"
-                required={!videoPreview}
-              />
-              <label htmlFor="video-upload" className="cursor-pointer space-y-3 block">
-                <div className="w-12 h-12 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto border border-indigo-500/20">
-                  <Video className="w-5 h-5 text-indigo-400" />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-slate-200">
-                    {videoFile ? videoFile.name : "Select workshop footage"}
-                  </p>
-                  <p className="text-xs text-slate-500">MP4 format recommended, up to 50MB</p>
-                </div>
-              </label>
-            </div>
+
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              onChange={handlePhotoFilesChange}
+              className="hidden"
+              id="photo-upload"
+            />
+            <label
+              htmlFor="photo-upload"
+              className="w-full border border-slate-800 border-dashed rounded-2xl px-4 py-5 text-sm text-slate-400 hover:text-white flex items-center justify-center gap-2 cursor-pointer hover:border-slate-700 transition-colors bg-slate-950"
+            >
+              <Upload className="w-4 h-4" />
+              {photoFiles.length ? `${photoFiles.length} photo(s) selected` : "Add photos (up to 6)"}
+            </label>
+
+            {photoPreviews.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {photoPreviews.map((src, i) => (
+                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-slate-800">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={src} alt={`Workshop photo ${i + 1}`} className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(i)}
+                      aria-label="Remove photo"
+                      className="absolute top-1 right-1 w-6 h-6 bg-slate-950/80 border border-slate-700 rounded-full flex items-center justify-center text-slate-300 hover:text-white hover:bg-rose-500/40 transition-colors"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <p className="text-[11px] text-slate-500 px-1">
+              Photos load far faster than video on a slow connection.
+            </p>
+          </div>
+
+          {/* Video — optional */}
+          <div className="space-y-3">
+            <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+              <Video className="w-4 h-4 text-indigo-400" /> Workshop video / ቪዲዮ
+              <span className="text-slate-500 normal-case font-normal tracking-normal">optional</span>
+            </label>
+
+            <input
+              type="file"
+              accept="video/*"
+              onChange={handleVideoFileChange}
+              className="hidden"
+              id="video-upload"
+            />
+            <label
+              htmlFor="video-upload"
+              className="w-full border border-slate-800 border-dashed rounded-2xl px-4 py-5 text-sm text-slate-400 hover:text-white flex items-center justify-center gap-2 cursor-pointer hover:border-slate-700 transition-colors bg-slate-950"
+            >
+              <Upload className="w-4 h-4" /> {videoFile ? videoFile.name : "Upload a video (up to 50MB)"}
+            </label>
+
             {videoPreview && (
               <div className="aspect-video rounded-xl overflow-hidden bg-slate-950 border border-slate-800">
                 <video src={videoPreview} controls className="w-full h-full object-cover" />
@@ -374,12 +382,12 @@ export default function FounderPage() {
             )}
           </div>
 
-          {/* Consent Section */}
+          {/* Consent */}
           <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-4 space-y-4">
             <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
-              <Shield className="w-4 h-4" /> Revocable Off-chain Consent
+              <Shield className="w-4 h-4" /> Revocable off-chain consent
             </div>
-            
+
             <div className="space-y-3">
               <label className="flex items-start gap-3 cursor-pointer group">
                 <input
@@ -389,7 +397,8 @@ export default function FounderPage() {
                   className="mt-1 rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 focus:ring-offset-0"
                 />
                 <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors leading-relaxed">
-                  I, <strong>{founderName}</strong>, consent to make this story and voice note publicly accessible via the QR code links. I understand I can revoke this consent at any time.
+                  I, <strong>{founderName}</strong>, consent to this story and voice note being reachable
+                  through the certificate QR code. I can revoke this at any time.
                 </span>
               </label>
 
@@ -401,21 +410,29 @@ export default function FounderPage() {
                   className="mt-1 rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 focus:ring-offset-0"
                 />
                 <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors leading-relaxed">
-                  Employee <strong>Selam Girma</strong> consents to appear in the uploaded video for public sharing purposes. She understands she can revoke this consent at any time.
+                  Employee <strong>Selam Girma</strong> consents to appearing in the uploaded media.
+                  She can revoke this at any time.
                 </span>
               </label>
             </div>
           </div>
 
-          {/* Submit Button */}
           <button
             type="submit"
-            className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-semibold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 group shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all"
+            disabled={isExtracting}
+            className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 disabled:opacity-60 text-white font-semibold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 group shadow-lg shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all"
           >
-            Create Impact Story <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            {isExtracting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Reading audio from video…
+              </>
+            ) : (
+              <>
+                Create impact story <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </>
+            )}
           </button>
         </form>
-
       </div>
     </div>
   );
