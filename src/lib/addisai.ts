@@ -38,8 +38,8 @@ export const addisai = {
       const json = await res.json();
       console.log("Addis AI STT Response:", JSON.stringify(json));
       
-      // STT returns either response_text or text or data.transcript
-      const text = json.response_text || json.text || (json.data && json.data.transcript) || "";
+      // STT returns either response_text, text, or data.transcription/transcript
+      const text = json.response_text || json.text || (json.data && (json.data.transcription || json.data.transcript)) || "";
       if (!text) {
         throw new Error("Could not extract transcript from Addis AI STT response");
       }
@@ -112,6 +112,7 @@ export const addisai = {
 Below is a translated transcript of a garment workshop founder in Addis Ababa, and the verified milestone they reached.
 Please rewrite this transcript and milestone into a concise, respectful, and emotional story (approx 3-4 sentences) suitable for a donor-facing landing page.
 Use first-person perspective of the founder. Focus on human connection, Decent Work (SDG 8), and gratitude.
+Write the story strictly in English. Do not write in Amharic.
 
 Founder Transcript: "${englishTranscript}"
 Verified Milestone: "${milestone}"
@@ -139,7 +140,7 @@ Polished Story:`;
 
       const json = await res.json();
       console.log("Addis AI Chat Response:", JSON.stringify(json));
-      return json.response_text || json.text || "";
+      return (json.data && json.data.response_text) || json.response_text || json.text || "";
     } catch (error) {
       console.error("Error generating story:", error);
       return "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. Thanks to the support of our donors, we have grown our workshop and successfully hit our milestone of employing 9 local garment workers. This provides decent wages, healthcare support, and stability to 9 families in our community. We are incredibly grateful for the opportunity to show our workshop, our machines, and the dedication of our employees.";
@@ -188,7 +189,7 @@ JSON Array Output:`;
       }
 
       const json = await res.json();
-      const textResponse = json.response_text || json.text || "";
+      const textResponse = (json.data && json.data.response_text) || json.response_text || json.text || "";
       // Strip markdown code block wrappers if any
       const cleaned = textResponse.replace(/```json/g, "").replace(/```/g, "").trim();
       return JSON.parse(cleaned);
