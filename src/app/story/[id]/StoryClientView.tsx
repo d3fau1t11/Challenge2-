@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
-import { Play, Pause, Share2, Shield, ArrowLeft, Volume2, Landmark, Check, AlertTriangle, ExternalLink } from "lucide-react";
+import { Play, Pause, Share2, Shield, ArrowLeft, Landmark, Check, AlertTriangle, ExternalLink, Zap } from "lucide-react";
 import { Certificate, Story, Consent } from "@/lib/db";
 
 interface StoryClientViewProps {
@@ -12,83 +12,36 @@ interface StoryClientViewProps {
 }
 
 export default function StoryClientView({ story, certificate, consents }: StoryClientViewProps) {
-  // Check if consent has been revoked for public sharing
-  const publicConsentDawit = consents.find(c => c.person_name === story.founder_name);
-  const publicConsentSelam = consents.find(c => c.person_name === "Selam Girma");
-
-  const isAccessRestricted = 
-    (publicConsentDawit?.revoked || publicConsentDawit?.permissions.public_page === false) ||
-    (publicConsentSelam?.revoked || publicConsentSelam?.permissions.public_page === false);
-
-  // Audio/Video player sync states
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [isPlayingVideo, setIsPlayingVideo] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [activeMedia, setActiveMedia] = useState<"audio" | "video" | null>(null);
+  const [duration, setDuration] = useState(0);
   const [copied, setCopied] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Sync subtitle tracking
-  const handleTimeUpdate = (time: number) => {
-    setCurrentTime(time);
-  };
+  // Media resolution: fall back to the legacy single video_url field
+  const media =
+    story.media && story.media.length > 0
+      ? story.media
+      : story.video_url
+      ? [{ url: story.video_url, type: "video" as const }]
+      : [];
 
-  // Find the subtitle that fits the current time
-  const activeCaption = story.captions.find(
-    (c) => currentTime >= c.start && currentTime <= c.end
-  );
+  const videoItem = media.find((m) => m.type === "video");
+  const photos = media.filter((m) => m.type === "image");
 
-  // Copy link utility
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  // Consent: per person, per purpose. Anyone who declined the public page is
+  // blurred — the story still plays for everyone else.
+  const restrictedPeople = consents
+    .filter((c) => c.revoked || c.permissions?.public_page === false)
+    .map((c) => c.person_name);
 
-  // Audio trigger
-  const toggleAudio = () => {
-    if (isPlayingVideo) {
-      videoRef.current?.pause();
-      setIsPlayingVideo(false);
-    }
+  const founderRestricted = restrictedPeople.includes(story.founder_name);
+  const anyoneRestricted = restrictedPeople.length > 0;
 
-    if (audioRef.current) {
-      if (isPlayingAudio) {
-        audioRef.current.pause();
-        setIsPlayingAudio(false);
-        setActiveMedia(null);
-      } else {
-        audioRef.current.play().catch(() => {});
-        setIsPlayingAudio(true);
-        setActiveMedia("audio");
-      }
-    }
-  };
-
-  // Video trigger
-  const toggleVideo = () => {
-    if (isPlayingAudio) {
-      audioRef.current?.pause();
-      setIsPlayingAudio(false);
-    }
-
-    if (videoRef.current) {
-      if (isPlayingVideo) {
-        videoRef.current.pause();
-        setIsPlayingVideo(false);
-        setActiveMedia(null);
-      } else {
-        videoRef.current.play().catch(() => {});
-        setIsPlayingVideo(true);
-        setActiveMedia("video");
-      }
-    }
-  };
-
-  // Render Access Restricted Screen if consent is revoked
-  if (isAccessRestricted) {
+  // If the founder himself revoked, there is no story to show at all
+  if (founderRestricted) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center p-6">
         <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-xl border border-rose-500/20 rounded-3xl p-8 shadow-2xl text-center space-y-6">
@@ -96,207 +49,255 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
             <AlertTriangle className="w-8 h-8" />
           </div>
 
-          <h2 className="text-2xl font-bold text-rose-300">
-            Access Restricted
-          </h2>
-          
+          <h2 className="text-2xl font-bold text-rose-300">Story withdrawn</h2>
+
           <div className="text-sm text-slate-400 leading-relaxed text-left space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <p>
-              In compliance with privacy standards, off-chain content (voice notes, videos, and narrative story) is immediately removed if consent is revoked.
+              The founder has withdrawn consent for this story. The off-chain voice, media, and
+              narrative are no longer shown.
             </p>
-            <p className="font-semibold text-rose-400/90 text-xs">
-              Status: One or more participants in this story have revoked their consent for public sharing.
+            <p className="text-emerald-400/90 text-xs font-semibold">
+              The impact certificate is unaffected. Nothing on the chain has changed.
             </p>
           </div>
 
-          <div className="space-y-3 pt-4">
-            <Link
-              href={`/certificate/${certificate.id}`}
-              className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-2 transition-all"
-            >
-              View Verified Certificate <ExternalLink className="w-4 h-4" />
-            </Link>
-
-            <Link
-              href={`/consent/${story.id}`}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-2 transition-all"
-            >
-              Configure Consent Settings
-            </Link>
-          </div>
+          <Link
+            href={`/certificate/${certificate.id}`}
+            className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-2 transition-all"
+          >
+            View verified certificate <ExternalLink className="w-4 h-4" />
+          </Link>
         </div>
       </div>
     );
   }
 
+  const activeCaption = story.captions?.find(
+    (c) => currentTime >= c.start && currentTime <= c.end
+  );
+
+  // Which photo shows right now: divide the clip evenly across them
+  const photoIndex =
+    photos.length > 0 && duration > 0
+      ? Math.min(photos.length - 1, Math.floor((currentTime / duration) * photos.length))
+      : 0;
+
+  const togglePlay = () => {
+    const el = videoItem ? videoRef.current : audioRef.current;
+    if (!el) return;
+
+    if (isPlaying) {
+      el.pause();
+      setIsPlaying(false);
+    } else {
+      el.play().catch(() => {});
+      setIsPlaying(true);
+    }
+  };
+
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-10 px-4">
-      {/* Fallback Audio element */}
       <audio
         ref={audioRef}
-        src={story.voice_url || "/sounds/mock_audio.mp3"}
-        onTimeUpdate={() => audioRef.current && activeMedia === "audio" && handleTimeUpdate(audioRef.current.currentTime)}
-        onEnded={() => {
-          setIsPlayingAudio(false);
-          setActiveMedia(null);
-        }}
+        src={story.voice_url}
+        onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
+        onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || 0)}
+        onEnded={() => setIsPlaying(false)}
         className="hidden"
       />
 
       <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-3xl overflow-hidden shadow-2xl space-y-6 flex flex-col relative pb-8">
-        
-        {/* Header Back button */}
+
         <div className="px-6 pt-6 flex justify-between items-center">
           <Link
             href={`/certificate/${certificate.id}`}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
           >
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Certificate
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to certificate
           </Link>
-          
-          <span className="inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
-            Active Story
-          </span>
+
+          {/* Honesty badge: says plainly whether the AI ran live */}
+          {story.ai_source === "live" ? (
+            <span className="inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+              <Zap className="w-3 h-3" /> Transcribed live
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+              Demo fallback
+            </span>
+          )}
         </div>
 
-        {/* Video Player Section */}
+        {/* Visual: video if there is one, otherwise photos cross-fading with the audio */}
         <div className="px-6">
           <div className="aspect-video bg-slate-950 rounded-2xl overflow-hidden border border-slate-800 relative group">
-            <video
-              ref={videoRef}
-              src={story.video_url}
-              onTimeUpdate={() => videoRef.current && activeMedia === "video" && handleTimeUpdate(videoRef.current.currentTime)}
-              onEnded={() => {
-                setIsPlayingVideo(false);
-                setActiveMedia(null);
-              }}
-              playsInline
-              onClick={toggleVideo}
-              className="w-full h-full object-cover cursor-pointer"
-            />
+            {videoItem ? (
+              <video
+                ref={videoRef}
+                src={videoItem.url}
+                onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime)}
+                onLoadedMetadata={() => videoRef.current && setDuration(videoRef.current.duration || 0)}
+                onEnded={() => setIsPlaying(false)}
+                playsInline
+                onClick={togglePlay}
+                className={`w-full h-full object-cover cursor-pointer ${
+                  anyoneRestricted ? "blur-md" : ""
+                }`}
+              />
+            ) : photos.length > 0 ? (
+              photos.map((p, i) => (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={p.url}
+                  src={p.url}
+                  alt=""
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+                    i === photoIndex ? "opacity-100" : "opacity-0"
+                  } ${anyoneRestricted ? "blur-md" : ""}`}
+                />
+              ))
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs">
+                No media
+              </div>
+            )}
 
-            {/* Video Controls Overlay */}
-            <div className={`absolute inset-0 bg-slate-950/40 flex items-center justify-center transition-opacity duration-300 ${
-              isPlayingVideo ? "opacity-0 group-hover:opacity-100" : "opacity-100"
-            }`}>
+            <div
+              className={`absolute inset-0 bg-slate-950/40 flex items-center justify-center transition-opacity duration-300 ${
+                isPlaying ? "opacity-0 group-hover:opacity-100" : "opacity-100"
+              }`}
+            >
               <button
-                onClick={toggleVideo}
+                onClick={togglePlay}
+                aria-label={isPlaying ? "Pause" : "Play"}
                 className="w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white border border-white/20 shadow-lg hover:scale-105 active:scale-95 transition-all"
               >
-                {isPlayingVideo ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-0.5" />}
+                {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 ml-0.5" />}
               </button>
             </div>
 
-            {/* Timed Captions Overlay (Active during video playing) */}
-            {isPlayingVideo && activeCaption && (
+            {isPlaying && activeCaption && (
               <div className="absolute bottom-4 left-4 right-4 bg-slate-950/80 backdrop-blur-sm border border-slate-800 text-white text-xs px-3 py-2 rounded-xl text-center font-medium shadow-md">
                 {activeCaption.text}
               </div>
             )}
           </div>
-        </div>
 
-        {/* Dawit's Amharic Voice Playback Trigger */}
-        <div className="px-6">
-          <div className="bg-slate-950/80 border border-slate-800 p-4 rounded-2xl flex items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="text-xs font-bold text-slate-300 flex items-center gap-1.5">
-                <Volume2 className="w-4 h-4 text-indigo-400" /> Dawit's Voice Note
-              </div>
-              <p className="text-[11px] text-slate-500">Play original voice recording in Amharic</p>
-            </div>
-            
-            <button
-              onClick={toggleAudio}
-              className={`w-10 h-10 rounded-full flex items-center justify-center border shadow-md transition-all ${
-                isPlayingAudio
-                  ? "bg-rose-500/10 border-rose-500/30 text-rose-400 animate-pulse"
-                  : "bg-indigo-500/10 border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/20"
-              }`}
-            >
-              {isPlayingAudio ? <Pause className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current ml-0.5" />}
-            </button>
-          </div>
-
-          {/* Subtitles Overlay during Voice Note playback */}
-          {isPlayingAudio && activeCaption && (
-            <div className="mt-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs px-4 py-3 rounded-xl text-center font-semibold italic animate-fade-in">
-              "{activeCaption.text}"
+          {photos.length > 1 && (
+            <div className="flex gap-1 justify-center pt-3">
+              {photos.map((p, i) => (
+                <div
+                  key={p.url}
+                  className={`h-1 rounded-full transition-all duration-500 ${
+                    i === photoIndex ? "w-6 bg-indigo-400" : "w-2 bg-slate-700"
+                  }`}
+                />
+              ))}
             </div>
           )}
         </div>
 
-        {/* Narrative Narrative Block */}
+        {anyoneRestricted && (
+          <div className="mx-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3 flex gap-2.5 items-start">
+            <Shield className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+            <p className="text-[11px] text-amber-300/90 leading-relaxed">
+              {restrictedPeople.join(", ")} limited visibility to the funder&apos;s page only, so the
+              media is blurred here. The story still plays.
+            </p>
+          </div>
+        )}
+
         <div className="px-6 space-y-3">
-          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Dawit's Story</div>
+          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+            {story.founder_name}&apos;s story
+          </div>
           <div className="bg-slate-950/30 border-l-2 border-indigo-500/40 pl-4 py-1 italic text-slate-300 text-sm leading-relaxed">
-            "{story.generated_story}"
+            &ldquo;{story.generated_story}&rdquo;
           </div>
         </div>
 
-        {/* Impact Badges Layer */}
+        {story.amharic_transcript && (
+          <div className="px-6 space-y-2">
+            <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+              In his own words / በራሱ አንደበት
+            </div>
+            <p className="text-slate-400 text-sm leading-loose">{story.amharic_transcript}</p>
+          </div>
+        )}
+
         <div className="px-6 space-y-3">
-          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Verified Impact</div>
+          <div className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+            Verified impact
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2 text-center">
               <div className="text-indigo-400 text-sm font-black">{certificate.milestone}</div>
               <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Milestone</div>
             </div>
             <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2 text-center">
-              <div className="text-indigo-400 text-sm font-black">Addis Ababa</div>
+              <div className="text-indigo-400 text-sm font-black">{certificate.region}</div>
               <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Location</div>
             </div>
             <div className="bg-slate-950/80 border border-slate-800 rounded-xl p-2 text-center">
-              <div className="text-emerald-400 text-sm font-black flex items-center justify-center gap-0.5">
-                SDG 8
-              </div>
-              <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Decent Work</div>
+              <div className="text-emerald-400 text-sm font-black">SDG 8</div>
+              <div className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold">Decent work</div>
             </div>
           </div>
         </div>
 
-        {/* Certificate details block */}
-        <div className="mx-6 p-4 bg-slate-950/60 border border-slate-800 rounded-2xl space-y-3">
-          <div className="flex items-center justify-between text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-            <span className="flex items-center gap-1.5"><Landmark className="w-3.5 h-3.5 text-emerald-400" /> Certificate Reference</span>
-            <Link
-              href={`/certificate/${certificate.id}`}
-              className="text-emerald-400 hover:underline flex items-center gap-0.5"
-            >
-              View Certificate
+        {/* Layer 1 panel — deliberately visually distinct from the story above */}
+        <div className="mx-6 p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl space-y-3">
+          <div className="flex items-center justify-between text-[10px] uppercase font-bold text-emerald-400/80 tracking-wider">
+            <span className="flex items-center gap-1.5">
+              <Landmark className="w-3.5 h-3.5" /> On chain — anonymous
+            </span>
+            <Link href={`/certificate/${certificate.id}`} className="text-emerald-400 hover:underline">
+              View certificate
             </Link>
           </div>
           <div className="space-y-1 font-mono text-[10px] text-slate-500 leading-normal">
-            <div>Hash: <span className="text-slate-400 break-all select-all">{certificate.hash.slice(0, 32)}...</span></div>
+            <div>Region: <span className="text-slate-400">{certificate.region}</span></div>
             <div>Date: <span className="text-slate-400">{certificate.date}</span></div>
+            <div>SDG: <span className="text-slate-400">{certificate.sdg}</span></div>
+            <div className="break-all">
+              Hash: <span className="text-slate-400 select-all">{certificate.hash.slice(0, 34)}…</span>
+            </div>
           </div>
+          <p className="text-[10px] text-emerald-400/60 leading-relaxed">
+            No name, face, or voice is recorded on the chain. Those live only in the story above,
+            and can be deleted without touching this.
+          </p>
         </div>
 
-        {/* Footer Actions */}
         <div className="px-6 pt-2 flex gap-3">
           <button
             onClick={handleShare}
-            className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-indigo-500/10 hover:shadow-indigo-500/20 active:scale-[0.98] transition-all"
+            className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md active:scale-[0.98] transition-all"
           >
             {copied ? (
               <>
-                <Check className="w-4 h-4" /> Link Copied!
+                <Check className="w-4 h-4" /> Link copied
               </>
             ) : (
               <>
-                <Share2 className="w-4 h-4" /> Share Story
+                <Share2 className="w-4 h-4" /> Share story
               </>
             )}
           </button>
-          
+
           <Link
             href={`/consent/${story.id}`}
             className="bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-semibold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
           >
-            <Shield className="w-4 h-4 text-indigo-400" /> Manage Privacy
+            <Shield className="w-4 h-4 text-indigo-400" /> Manage privacy
           </Link>
         </div>
-
       </div>
     </div>
   );
