@@ -7,14 +7,17 @@ import { db, Consent, Narration, Story } from "@/lib/db";
 import { addisai, splitTextToCaptions } from "@/lib/addisai";
 import { synthesize, voiceIdFor, MAX_TTS_CHARS, Caption } from "@/lib/elevenlabs";
 
-export type NarrationLang = "en" | "de";
+export type NarrationLang = "en" | "de" | "om" | "ti";
 
 // Tier 3. Guarantees the demo runs even with both APIs down. Stored with
 // source: 'fallback' so the page can say so out loud.
 const CANNED: Record<NarrationLang, string> = {
   en: "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. With the support of our donors we have grown the workshop and now employ nine local garment workers. That means steady wages and stability for nine families in our community.",
   de: "Mein Name ist Dawit Alemu. Ich führe eine Textilwerkstatt in Addis Abeba, Äthiopien. Mit der Unterstützung unserer Spender konnten wir die Werkstatt vergrößern und beschäftigen heute neun Näherinnen und Näher aus der Umgebung. Das bedeutet ein verlässliches Einkommen und Sicherheit für neun Familien in unserer Gemeinschaft.",
+  om: "Maqaan koo Daawit Alamuu jedhama. Finfinnee, Itoophiyaatti kutaadhaan uffata isfaala sakatta'u tokko geggeessa. Deeggarsa gummatawwan keenyaatiin hojii keenya babal'isnee amma hojjettoota 9 qabna.",
+  ti: "ስመይ ዳዊት ዓለሙ ይበሃል። ኣብ አዲስ አበባ ናይ ክዳውንቲ መስፊሒ መደብር አለኒ። ብናይ ደገፍትና ሓገዝ ስራሕና ብምስፋሕ ሕዚ 9 ሰራሕተኛታት አለዉና።",
 };
+
 
 /**
  * Is translated narration permitted for this story?

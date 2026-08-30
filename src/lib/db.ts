@@ -18,13 +18,21 @@ export interface MediaItem {
   type: "video" | "image";
 }
 
+export type StoryVisibility = "public" | "donor_only" | "private";
+export type StoryStatus = "DRAFT" | "PROCESSING" | "READY_FOR_REVIEW" | "APPROVED" | "PUBLISHED" | "REVOKED";
+
 export interface Story {
   id: string;
   certificate_id: string;
+  founder_id?: string;
   founder_name: string;
   voice_url: string;
   video_url: string;
   media: MediaItem[];
+  visibility?: StoryVisibility;
+  status?: StoryStatus;
+  donor_name?: string;
+  donor_email?: string;
   ai_source: "live" | "fallback";
   amharic_transcript: string;
   english_translation: string;
@@ -32,7 +40,9 @@ export interface Story {
   captions: Array<{ start: number; end: number; text: string }>;
   scenes: Array<{ start: number; end: number; description: string; importance: string }>;
   created_at: string;
+  updated_at?: string;
 }
+
 
 export interface Consent {
   id: string;
@@ -60,7 +70,7 @@ export interface Consent {
 export interface Narration {
   id: string;
   story_id: string;
-  lang: "en" | "de";
+  lang: "en" | "de" | "om" | "ti";
   text: string;
   audio_url: string | null;
   captions: Array<{ start: number; end: number; text: string }>;
@@ -69,6 +79,7 @@ export interface Narration {
   source: "live" | "fallback";
   created_at: string;
 }
+
 
 // Check environment variables
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -232,7 +243,13 @@ export const db = {
   createStory: async (story: Omit<Story, 'id' | 'created_at'>): Promise<Story> => {
     const id = generateUuid();
     const created_at = new Date().toISOString();
-    const newStory: Story = { id, created_at, ...story };
+    const newStory: Story = {
+      id,
+      created_at,
+      status: story.status || "READY_FOR_REVIEW",
+      visibility: story.visibility || "donor_only",
+      ...story,
+    };
 
     if (isSupabaseConfigured && supabase) {
       const { data, error } = await supabase
@@ -252,6 +269,82 @@ export const db = {
       return newStory;
     }
   },
+
+  getAllStories: async (): Promise<Story[]> => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('stories')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error fetching all stories from Supabase:', error);
+        return [];
+      }
+      return data || [];
+    } else {
+      const data = readLocalDb();
+      return [...data.stories].reverse();
+    }
+  },
+
+  getStoriesByFounder: async (founderId: string): Promise<Story[]> => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('stories')
+        .select('*')
+        .or(`founder_id.eq.${founderId},founder_name.ilike.%${founderId}%`)
+        .order('created_at', { ascending: false });
+      if (error) {
+        console.error('Error fetching founder stories from Supabase:', error);
+        return db.getAllStories();
+      }
+      return data || [];
+    } else {
+      const data = readLocalDb();
+      return data.stories.filter(
+        (s) => s.founder_id === founderId || s.founder_name.toLowerCase().includes(founderId.toLowerCase())
+      );
+    }
+  },
+
+  updateStory: async (id: string, updates: Partial<Story>): Promise<Story | null> => {
+    const updated_at = new Date().toISOString();
+    const payload = { ...updates, updated_at };
+
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('stories')
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) {
+        console.error('Error updating story on Supabase:', error);
+        return null;
+      }
+      return data;
+    } else {
+      const data = readLocalDb();
+      const idx = data.stories.findIndex((s) => s.id === id);
+      if (idx !== -1) {
+        data.stories[idx] = { ...data.stories[idx], ...payload };
+        writeLocalDb(data);
+        return data.stories[idx];
+      }
+      return null;
+    }
+  },
+
+  revokeStory: async (id: string): Promise<boolean> => {
+    const result = await db.updateStory(id, { status: "REVOKED" });
+    if (result) {
+      // Also delete derived multi-language MP3 narrations for privacy
+      await db.deleteNarrations(id);
+      return true;
+    }
+    return false;
+  },
+
 
   // --- CONSENT ---
   getConsentForStory: async (storyId: string): Promise<Consent[]> => {
@@ -360,10 +453,11 @@ export const db = {
     }
   },
 
-  getNarration: async (storyId: string, lang: "en" | "de"): Promise<Narration | null> => {
+  getNarration: async (storyId: string, lang: "en" | "de" | "om" | "ti"): Promise<Narration | null> => {
     const rows = await db.getNarrations(storyId);
     return rows.find((n) => n.lang === lang) || null;
   },
+
 
   upsertNarration: async (row: Omit<Narration, 'id' | 'created_at'>): Promise<Narration> => {
     if (isSupabaseConfigured && supabase) {

@@ -8,12 +8,16 @@
 // a real person. If it fails to load we show an error, not a robot pretending
 // to be him.
 
-export type SpeechLang = "en" | "de";
+export type SpeechLang = "en" | "de" | "om" | "ti" | "am";
 
 const BCP47: Record<SpeechLang, string> = {
   en: "en-US",
   de: "de-DE",
+  om: "om-ET",
+  ti: "ti-ET",
+  am: "am-ET",
 };
+
 
 export function speechSupported(): boolean {
   return typeof window !== "undefined" && typeof window.speechSynthesis !== "undefined";

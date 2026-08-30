@@ -7,7 +7,7 @@ import { buildNarration, narrationAllowed, NarrationLang } from "@/lib/narration
 export const maxDuration = 60;
 
 function parseLang(value: unknown): NarrationLang | null {
-  return value === "en" || value === "de" ? value : null;
+  return value === "en" || value === "de" || value === "om" || value === "ti" ? value : null;
 }
 
 /**
@@ -28,10 +28,11 @@ export async function POST(req: NextRequest) {
     }
     if (!lang) {
       return NextResponse.json(
-        { error: "lang must be 'en' or 'de'. Amharic is the original recording, not a narration." },
+        { error: "lang must be one of: 'en', 'de', 'om', 'ti'." },
         { status: 400 }
       );
     }
+
 
     // Real rows only. No mock-story fallback here — /story/anything must never
     // create narration rows for a story that does not exist.

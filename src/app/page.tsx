@@ -68,7 +68,15 @@ export default function Home() {
             href="/founder"
             className="w-full sm:w-auto bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold py-4 px-8 rounded-2xl text-sm flex items-center justify-center gap-2 group shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 active:scale-[0.98] transition-all"
           >
-            Founder Portal <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            Create Impact Story <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+          </Link>
+
+          {/* Founder Dashboard Link */}
+          <Link
+            href="/founder/dashboard"
+            className="w-full sm:w-auto bg-slate-900 border border-indigo-500/20 text-indigo-300 hover:bg-slate-850 font-bold py-4 px-8 rounded-2xl text-sm flex items-center justify-center gap-2 hover:border-indigo-500/40 active:scale-[0.98] transition-all"
+          >
+            <ShieldCheck className="w-4 h-4 text-indigo-400" /> Founder Dashboard
           </Link>
 
           {/* Certificate Demo Link */}
@@ -76,25 +84,12 @@ export default function Home() {
             href="/certificate/demo-cert"
             className="w-full sm:w-auto bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-200 font-bold py-4 px-8 rounded-2xl text-sm flex items-center justify-center gap-2 hover:border-slate-700 active:scale-[0.98] transition-all"
           >
-            <QrCode className="w-4 h-4 text-emerald-400" /> View Demo Certificate
+            <QrCode className="w-4 h-4 text-emerald-400" /> View Certificate
           </Link>
 
         </div>
-
-        {/* Demo Scenario Box */}
-        <div className="max-w-md mx-auto bg-slate-950/80 border border-slate-900 p-4 rounded-2xl flex items-start gap-3 text-left">
-          <div className="w-8 h-8 bg-indigo-500/10 border border-indigo-500/20 rounded-full flex items-center justify-center text-indigo-400 mt-0.5 flex-shrink-0">
-            <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
-          </div>
-          <div className="space-y-1">
-            <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wide">Hackathon Demo Scenario</div>
-            <p className="text-[11px] text-slate-500 leading-relaxed">
-              Dawit Alemu records an Amharic note about expanding to <strong>9 employees</strong> in Addis Ababa. AI transcribes and translates it, while NVIDIA Nemotron maps the scenes. Scan the QR code on the certificate to see Dawit's story!
-            </p>
-          </div>
-        </div>
-
       </main>
     </div>
   );
 }
+

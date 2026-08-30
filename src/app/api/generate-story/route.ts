@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { addisai } from "@/lib/addisai";
+import { nvidia } from "@/lib/nvidia";
+
 
 export interface MediaItem {
   url: string;
@@ -21,6 +23,11 @@ export async function POST(req: NextRequest) {
 
     const milestone = (formData.get("milestone") as string) || "9 employees";
     const founderName = (formData.get("founderName") as string) || "Dawit Alemu";
+    const founderId = (formData.get("founderId") as string) || "";
+    const visibility = ((formData.get("visibility") as string) || "donor_only") as "public" | "donor_only" | "private";
+    const donorName = (formData.get("donorName") as string) || "";
+    const donorEmail = (formData.get("donorEmail") as string) || "";
+
     const consentDawit = formData.get("consentDawit") === "true";
     const consentSelam = formData.get("consentSelam") === "true";
     // Default true when the field is absent so older clients keep working.
@@ -101,6 +108,11 @@ export async function POST(req: NextRequest) {
     const captions = await addisai.generateCaptions(translation.text, duration);
     console.log("Captions generated.");
 
+    // NVIDIA Nemotron-3 Nano Omni scene analysis
+    const mediaUrls = media.map((m) => m.url);
+    const scenes = await nvidia.analyzeWorkshopMedia(mediaUrls, milestone);
+    console.log("NVIDIA Nemotron scene analysis completed.");
+
     const aiSource: "live" | "fallback" =
       transcription.live && translation.live && story.live ? "live" : "fallback";
 
@@ -130,19 +142,25 @@ export async function POST(req: NextRequest) {
 
     const savedStory = await db.createStory({
       certificate_id: cert.id,
+      founder_id: founderId,
       founder_name: founderName,
       voice_url: voiceUrl,
       video_url: videoItem ? videoItem.url : "",
       media,
+      visibility,
+      status: "READY_FOR_REVIEW",
+      donor_name: donorName,
+      donor_email: donorEmail,
       ai_source: aiSource,
       amharic_transcript: transcription.text,
       english_translation: translation.text,
       generated_story: story.text,
       captions,
-      scenes: [],
+      scenes,
     });
 
-    console.log(`Story record created. ID: ${savedStory.id} (AI source: ${aiSource})`);
+    console.log(`Story record created. ID: ${savedStory.id} (Status: READY_FOR_REVIEW, Visibility: ${visibility})`);
+
 
     // --- Consent: per person, per purpose, revocable ---
     await db.createConsent({

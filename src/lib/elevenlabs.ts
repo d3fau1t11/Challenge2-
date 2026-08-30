@@ -41,9 +41,10 @@ export interface TtsResult {
   live: boolean;
 }
 
-export function voiceIdFor(lang: "en" | "de"): string {
+export function voiceIdFor(lang: "en" | "de" | "om" | "ti"): string {
   return lang === "de" ? VOICE_DE : VOICE_EN;
 }
+
 
 const round1 = (n: number) => parseFloat(n.toFixed(1));
 
@@ -101,7 +102,8 @@ export function alignmentToCaptions(alignment: Alignment | null | undefined): Ca
  * throwing when the key is missing or the call fails, so the caller never
  * needs a try/catch. The failure reason is always logged, never swallowed.
  */
-export async function synthesize(text: string, lang: "en" | "de"): Promise<TtsResult> {
+export async function synthesize(text: string, lang: "en" | "de" | "om" | "ti"): Promise<TtsResult> {
+
   const voiceId = voiceIdFor(lang);
   const apiKey = process.env.ELEVENLABS_API_KEY;
 

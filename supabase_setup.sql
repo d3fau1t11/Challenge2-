@@ -30,18 +30,25 @@ create policy "Allow backend insertion to certificates"
 create table if not exists public.stories (
   id uuid primary key,
   certificate_id uuid references public.certificates(id) on delete cascade,
+  founder_id text,
   founder_name text not null,
   voice_url text not null,
   video_url text not null,
   media jsonb not null default '[]'::jsonb,
+  visibility text not null default 'donor_only',
+  status text not null default 'READY_FOR_REVIEW',
+  donor_name text,
+  donor_email text,
   ai_source text not null default 'fallback',
   amharic_transcript text not null,
   english_translation text not null,
   generated_story text not null,
   captions jsonb not null,
   scenes jsonb not null,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now())
 );
+
 
 
 -- Enable RLS (Read-only public access)

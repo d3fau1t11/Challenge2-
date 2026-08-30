@@ -21,7 +21,8 @@ import {
 import { Certificate, Story, Consent, Narration } from "@/lib/db";
 import { speak, cancelSpeech, speechSupported, onVoicesReady } from "@/lib/speechFallback";
 
-type Lang = "am" | "en" | "de";
+type Lang = "am" | "om" | "ti" | "en" | "de";
+
 
 interface StoryClientViewProps {
   story: Story;
@@ -195,8 +196,75 @@ export default function StoryClientView({
     }
   }, [stopRafTimer]);
 
-  // If the founder himself revoked, there is no story to show at all
-  if (founderRestricted) {
+  const isRevoked = story.status === "REVOKED" || founderRestricted;
+  const isDonorOnly = story.visibility === "donor_only";
+  const isPrivate = story.visibility === "private";
+
+  const [donorUnlocked, setDonorUnlocked] = useState(story.visibility === "public");
+  const [donorEmailInput, setDonorEmailInput] = useState(story.donor_email || "anna@example.com");
+  const [otpInput, setOtpInput] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [donorAuthError, setDonorAuthError] = useState<string | null>(null);
+  const [donorAuthLoading, setDonorAuthLoading] = useState(false);
+
+  const handleSendOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDonorAuthError(null);
+    setDonorAuthLoading(true);
+
+    try {
+      const res = await fetch("/api/donor-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "send",
+          storyId: story.id,
+          email: donorEmailInput,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send verification code.");
+
+      setOtpSent(true);
+      setOtpInput("123456"); // Pre-fill demo verification code for speed
+    } catch (err: any) {
+      setDonorAuthError(err.message || "Failed to send code.");
+    } finally {
+      setDonorAuthLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDonorAuthError(null);
+    setDonorAuthLoading(true);
+
+    try {
+      const res = await fetch("/api/donor-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify",
+          storyId: story.id,
+          email: donorEmailInput,
+          otp: otpInput,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Invalid verification code.");
+
+      setDonorUnlocked(true);
+    } catch (err: any) {
+      setDonorAuthError(err.message || "Verification failed.");
+    } finally {
+      setDonorAuthLoading(false);
+    }
+  };
+
+  // If the founder revoked or restricted, display revoked status while certificate stays valid
+  if (isRevoked) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center p-6">
         <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-xl border border-rose-500/20 rounded-3xl p-8 shadow-2xl text-center space-y-6">
@@ -204,28 +272,121 @@ export default function StoryClientView({
             <AlertTriangle className="w-8 h-8" />
           </div>
 
-          <h2 className="text-2xl font-bold text-rose-300">Story withdrawn</h2>
+          <h2 className="text-2xl font-bold text-rose-300">Off-Chain Story Revoked</h2>
 
           <div className="text-sm text-slate-400 leading-relaxed text-left space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
             <p>
-              The founder has withdrawn consent for this story. The off-chain voice, media, and
-              narrative are no longer shown.
+              The story creator has revoked off-chain media and narrative permissions for this story.
             </p>
-            <p className="text-emerald-400/90 text-xs font-semibold">
-              The impact certificate is unaffected. Nothing on the chain has changed.
-            </p>
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl space-y-1">
+              <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                Blockchain Certificate Intact
+              </div>
+              <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+                The impact certificate <strong>#{certificate.hash.slice(0, 10)}...</strong> remains 100% valid, tamper-proof, and unchanged on-chain.
+              </p>
+            </div>
           </div>
 
           <Link
             href={`/certificate/${certificate.id}`}
-            className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold py-3 px-6 rounded-xl text-sm flex items-center justify-center gap-2 transition-all"
+            className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold py-3.5 px-6 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg"
           >
-            View verified certificate <ExternalLink className="w-4 h-4" />
+            View Verified Certificate <ExternalLink className="w-4 h-4" />
           </Link>
         </div>
       </div>
     );
   }
+
+  // Donor Only OTP Gatekeeper
+  if (isDonorOnly && !donorUnlocked) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-12 px-4 sm:px-6">
+        <div className="max-w-md w-full bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
+          <div className="w-14 h-14 bg-indigo-500/10 border border-indigo-500/20 rounded-full flex items-center justify-center mx-auto text-indigo-400">
+            <Shield className="w-7 h-7" />
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-2xl font-extrabold text-white">Donor Access Required</h2>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              This impact story is reserved for assigned donors. Please enter your email to receive an instant verification code.
+            </p>
+          </div>
+
+          {donorAuthError && (
+            <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 px-4 py-2.5 rounded-xl text-xs">
+              {donorAuthError}
+            </div>
+          )}
+
+          {!otpSent ? (
+            <form onSubmit={handleSendOtp} className="space-y-4 text-left">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                  Donor Email Address
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={donorEmailInput}
+                  onChange={(e) => setDonorEmailInput(e.target.value)}
+                  placeholder="e.g. anna@example.com"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={donorAuthLoading}
+                className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold py-3.5 px-6 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98]"
+              >
+                {donorAuthLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send Verification Code"}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleVerifyOtp} className="space-y-4 text-left">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                  Enter 6-Digit OTP Code
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={otpInput}
+                  onChange={(e) => setOtpInput(e.target.value)}
+                  placeholder="123456"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-center text-lg font-mono tracking-widest text-indigo-400 focus:outline-none focus:border-indigo-500 transition-colors"
+                />
+                <p className="text-[11px] text-slate-500 text-center">
+                  Verification code sent to {donorEmailInput} (Demo Code: <strong>123456</strong>)
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={donorAuthLoading}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold py-3.5 px-6 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg active:scale-[0.98]"
+              >
+                {donorAuthLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify Code & Unlock Story"}
+              </button>
+            </form>
+          )}
+
+          <div className="pt-2">
+            <Link
+              href={`/certificate/${certificate.id}`}
+              className="text-xs text-slate-400 hover:text-white transition-colors"
+            >
+              &larr; View Anonymous Impact Certificate
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
 
   // Captions come from whichever track is selected. Fall back to story.captions
   // so English/Dutch in-video captions are always displayed during playback.
@@ -377,10 +538,13 @@ export default function StoryClientView({
   };
 
   const pills: Array<{ code: Lang; label: string; sub: string }> = [
-    { code: "am", label: "አማርኛ", sub: "Original" },
+    { code: "am", label: "አማርኛ", sub: "Amharic" },
+    { code: "om", label: "ኦሮምኛ", sub: "Oromo" },
+    { code: "ti", label: "ትግርኛ", sub: "Tigrinya" },
     { code: "en", label: "English", sub: "Translated" },
-    { code: "de", label: "Deutsch", sub: "Translated" },
+    { code: "de", label: "Deutsch", sub: "Germany" },
   ];
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-10 px-4">
@@ -501,8 +665,17 @@ export default function StoryClientView({
             {isPlaying && activeCaption && (
               <div className="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md border border-indigo-500/30 text-white text-xs px-3.5 py-2.5 rounded-xl text-center font-medium shadow-xl z-20 animate-[fadeIn_0.2s_ease-out]">
                 <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider block mb-0.5">
-                  {lang === "am" ? "አማርኛ Captions" : lang === "de" ? "Deutsch / Dutch" : "English"}
+                  {lang === "am"
+                    ? "አማርኛ Captions"
+                    : lang === "om"
+                    ? "ኦሮምኛ Captions"
+                    : lang === "ti"
+                    ? "ትግርኛ Captions"
+                    : lang === "de"
+                    ? "Deutsch / Germany Captions"
+                    : "English Captions"}
                 </span>
+
                 {activeCaption.text}
               </div>
             )}
