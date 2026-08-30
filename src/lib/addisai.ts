@@ -17,6 +17,45 @@ const FALLBACK_TRANSLATION =
 const FALLBACK_STORY =
   "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. Thanks to the support of our donors, we have grown our workshop and reached our milestone of employing 9 local garment workers. This provides decent wages and stability to 9 families in our community.";
 
+export async function translateWithChatGPT(text: string, targetLanguage: string = "English"): Promise<AiResult> {
+  const rapidApiKey = process.env.RAPIDAPI_CHATGPT_KEY || "4b4352b0e3msh8bb4052d5569861p16fffajsn29304da12b9e";
+  try {
+    console.log(`Calling ChatGPT API (RapidAPI) for translation to ${targetLanguage}...`);
+    const prompt = `Translate the following text into ${targetLanguage}. Return ONLY the translation, no commentary or intro.\n\nText: "${text}"`;
+    const res = await fetch("https://chatgpt-42.p.rapidapi.com/conversationgpt4-2", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-rapidapi-host": "chatgpt-42.p.rapidapi.com",
+        "x-rapidapi-key": rapidApiKey,
+      },
+      body: JSON.stringify({
+        messages: [{ role: "user", content: prompt }],
+        system_prompt: "",
+        temperature: 0.3,
+        top_k: 5,
+        top_p: 0.9,
+        max_tokens: 512,
+        web_access: false,
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error(`ChatGPT RapidAPI returned status ${res.status}`);
+    }
+
+    const json = await res.json();
+    const resultText = json.result || json.response_text || "";
+
+    if (!resultText) throw new Error("Empty response from ChatGPT API");
+    console.log(`ChatGPT Translation OK (${targetLanguage}):`, resultText.trim());
+    return { text: resultText.trim(), live: true };
+  } catch (error) {
+    console.error("ChatGPT translation failed:", error);
+    return { text: "", live: false };
+  }
+}
+
 export const addisai = {
   /**
    * Speech-to-text: Amharic or Afaan Oromo voice note to text
@@ -70,6 +109,13 @@ export const addisai = {
    * Translate Amharic text to English
    */
   translate: async (text: string, sourceLanguage: string = "am"): Promise<AiResult> => {
+    // Primary: ChatGPT API via RapidAPI
+    const chatGptRes = await translateWithChatGPT(text, "English");
+    if (chatGptRes.live && chatGptRes.text) {
+      return chatGptRes;
+    }
+
+    // Secondary fallback: Addis AI Translate
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
       console.warn("ADDIS_AI_API_KEY is not set. Using fallback translation.");
@@ -111,15 +157,22 @@ export const addisai = {
 
   /**
    * Translate to an arbitrary target language (used by the narration pipeline).
-   * Unlike translate() above there is no canned fallback here — the caller owns
-   * the fallback chain and needs to know honestly whether this tier worked.
-   * Returns { text: "", live: false } on any failure.
    */
   translateTo: async (
     text: string,
     sourceLanguage: string,
     targetLanguage: string
   ): Promise<AiResult> => {
+    const targetLanguageName =
+      targetLanguage === "de" ? "German" : targetLanguage === "en" ? "English" : targetLanguage;
+
+    // Primary: ChatGPT API via RapidAPI
+    const chatGptRes = await translateWithChatGPT(text, targetLanguageName);
+    if (chatGptRes.live && chatGptRes.text) {
+      return chatGptRes;
+    }
+
+    // Secondary fallback: Addis AI Translate
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
       console.warn("ADDIS_AI_API_KEY is not set. Skipping translateTo tier.");
@@ -158,11 +211,15 @@ export const addisai = {
   },
 
   /**
-   * Tier-2 fallback for a target language the translate endpoint does not
-   * support: ask the chat model to translate, with a hard instruction not to
-   * add facts. Returns { text: "", live: false } on failure.
+   * Fallback translation via chat model
    */
   translateViaChat: async (text: string, targetLanguageName: string): Promise<AiResult> => {
+    // Primary: ChatGPT API via RapidAPI
+    const chatGptRes = await translateWithChatGPT(text, targetLanguageName);
+    if (chatGptRes.live && chatGptRes.text) {
+      return chatGptRes;
+    }
+
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
       console.warn("ADDIS_AI_API_KEY is not set. Skipping translateViaChat tier.");
