@@ -1,6 +1,19 @@
 import { createClient } from '@supabase/supabase-js';
-import fs from 'fs';
-import path from 'path';
+
+// Safe server-only Node.js module access
+const getFs = () => (typeof window === 'undefined' ? require('fs') : null);
+const getPath = () => (typeof window === 'undefined' ? require('path') : null);
+
+function getLocalDbPath(): string {
+  const p = getPath();
+  return p ? p.join(process.cwd(), 'db.json') : '';
+}
+
+function getLocalUploadDir(): string {
+  const p = getPath();
+  return p ? p.join(process.cwd(), 'public', 'uploads') : '';
+}
+
 
 // Define types
 export interface Certificate {
@@ -89,10 +102,6 @@ const supabase = isSupabaseConfigured
   ? createClient(supabaseUrl!, supabaseServiceKey!)
   : null;
 
-// Local fallback database file
-const LOCAL_DB_PATH = path.join(process.cwd(), 'db.json');
-const LOCAL_UPLOAD_DIR = path.join(process.cwd(), 'public', 'uploads');
-
 interface LocalSchema {
   certificates: Certificate[];
   stories: Story[];
@@ -105,17 +114,19 @@ function emptyDb(): LocalSchema {
 }
 
 function readLocalDb(): LocalSchema {
-  if (!fs.existsSync(LOCAL_DB_PATH)) {
+  const fsMod = getFs();
+  const dbPath = getLocalDbPath();
+  if (!fsMod || !dbPath) return emptyDb();
+
+  if (!fsMod.existsSync(dbPath)) {
     const defaultDb = emptyDb();
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(defaultDb, null, 2), 'utf-8');
+    fsMod.writeFileSync(dbPath, JSON.stringify(defaultDb, null, 2), 'utf-8');
     return defaultDb;
   }
   try {
-    const raw = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
+    const raw = fsMod.readFileSync(dbPath, 'utf-8');
     const data = JSON.parse(raw) as Partial<LocalSchema>;
 
-    // Default every collection so an older db.json on someone's laptop
-    // does not crash after this migration.
     data.certificates ??= [];
     data.stories ??= [];
     data.consents ??= [];
@@ -125,13 +136,17 @@ function readLocalDb(): LocalSchema {
   } catch (e) {
     console.error('Error reading local JSON DB, resetting:', e);
     const defaultDb = emptyDb();
-    fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(defaultDb, null, 2), 'utf-8');
+    fsMod.writeFileSync(dbPath, JSON.stringify(defaultDb, null, 2), 'utf-8');
     return defaultDb;
   }
 }
 
 function writeLocalDb(data: LocalSchema) {
-  fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(data, null, 2), 'utf-8');
+  const fsMod = getFs();
+  const dbPath = getLocalDbPath();
+  if (fsMod && dbPath) {
+    fsMod.writeFileSync(dbPath, JSON.stringify(data, null, 2), 'utf-8');
+  }
 }
 
 // Generate standard UUID-like string for local fallback
@@ -149,16 +164,17 @@ export const db = {
   init: async () => {
     if (isSupabaseConfigured) {
       console.log('Using Supabase database.');
-      // In production, tables should be pre-created via migration.
-      // We assume Supabase tables are set up.
     } else {
-      console.log('Supabase not configured. Using local JSON fallback database:', LOCAL_DB_PATH);
-      if (!fs.existsSync(LOCAL_UPLOAD_DIR)) {
-        fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
+      const fsMod = getFs();
+      const uploadDir = getLocalUploadDir();
+      console.log('Supabase not configured. Using local JSON fallback database');
+      if (fsMod && uploadDir && !fsMod.existsSync(uploadDir)) {
+        fsMod.mkdirSync(uploadDir, { recursive: true });
       }
       readLocalDb(); // Ensure db.json exists
     }
   },
+
 
   // --- CERTIFICATES ---
   getCertificate: async (id: string): Promise<Certificate | null> => {
@@ -555,11 +571,16 @@ export const db = {
       return publicUrlData.publicUrl;
     } else {
       // Local write
-      if (!fs.existsSync(LOCAL_UPLOAD_DIR)) {
-        fs.mkdirSync(LOCAL_UPLOAD_DIR, { recursive: true });
+      const fsMod = getFs();
+      const pMod = getPath();
+      const uploadDir = getLocalUploadDir();
+      if (fsMod && uploadDir && pMod) {
+        if (!fsMod.existsSync(uploadDir)) {
+          fsMod.mkdirSync(uploadDir, { recursive: true });
+        }
+        const filePath = pMod.join(uploadDir, safeFileName);
+        fsMod.writeFileSync(filePath, fileBuffer);
       }
-      const filePath = path.join(LOCAL_UPLOAD_DIR, safeFileName);
-      fs.writeFileSync(filePath, fileBuffer);
 
       // Return relative web URL
       return `/uploads/${safeFileName}`;
@@ -567,9 +588,7 @@ export const db = {
   },
 
   /**
-   * Removes a stored object given its public URL. The object key is the last
-   * path segment. Never throws: a failed file delete must not block the consent
-   * update that triggered it — the consent write is the more important one.
+   * Removes a stored object given its public URL.
    */
   deleteMediaByUrl: async (url: string): Promise<boolean> => {
     try {
@@ -583,8 +602,13 @@ export const db = {
           return false;
         }
       } else {
-        const filePath = path.join(LOCAL_UPLOAD_DIR, key);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        const fsMod = getFs();
+        const pMod = getPath();
+        const uploadDir = getLocalUploadDir();
+        if (fsMod && pMod && uploadDir) {
+          const filePath = pMod.join(uploadDir, key);
+          if (fsMod.existsSync(filePath)) fsMod.unlinkSync(filePath);
+        }
       }
 
       console.log(`Deleted media object: ${key}`);
@@ -595,3 +619,4 @@ export const db = {
     }
   },
 };
+

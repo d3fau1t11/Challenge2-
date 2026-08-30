@@ -414,11 +414,14 @@ export default function StoryClientView({
   })();
 
 
-  // Which photo shows right now: divide the clip evenly across them
+  // Moving card index: changes every 1.5 seconds during playback (Live Photo style)
   const photoIndex =
-    photos.length > 0 && duration > 0
-      ? Math.min(photos.length - 1, Math.floor((currentTime / duration) * photos.length))
+    photos.length > 0
+      ? isPlaying
+        ? Math.floor(currentTime / 1.5) % photos.length
+        : 0
       : 0;
+
 
   const startDeviceVoice = (narration: Narration) => {
     clearStallTimer();
@@ -631,13 +634,16 @@ export default function StoryClientView({
                 <img
                   key={p.url}
                   src={p.url}
-                  alt=""
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
-                    i === photoIndex ? "opacity-100" : "opacity-0"
+                  alt="Workshop Live Photo"
+                  className={`absolute inset-0 w-full h-full object-cover transition-all duration-[1500ms] ease-in-out ${
+                    i === photoIndex
+                      ? "opacity-100 live-photo-card scale-105"
+                      : "opacity-0 scale-100 pointer-events-none"
                   } ${anyoneRestricted ? "blur-md" : ""}`}
                 />
               ))
             ) : (
+
               <div className="w-full h-full flex items-center justify-center text-slate-600 text-xs">
                 No media
               </div>

@@ -268,9 +268,10 @@ export default function ReviewStoryPage({ params }: { params: Promise<{ id: stri
 
           {story.donor_email && (
             <div className="text-xs text-slate-400 bg-slate-900 p-3 rounded-xl border border-slate-800">
-              Assigned Donor: <strong>{story.donor_name || "Assigned Donor"}</strong> ({story.donor_email})
+              Assigned Donor Email: <strong className="text-slate-200">{story.donor_email}</strong>
             </div>
           )}
+
         </div>
 
         {/* Action Buttons */}

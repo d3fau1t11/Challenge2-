@@ -19,7 +19,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
-import { Story, db } from "@/lib/db";
+import type { Story } from "@/lib/db";
 import { supabaseClient } from "@/lib/supabaseClient";
 import type { User } from "@supabase/supabase-js";
 
@@ -62,22 +62,16 @@ export default function FounderDashboardPage() {
   const loadFounderStories = async (currentUser: User) => {
     setLoadingStories(true);
     try {
-      // Fetch stories from Supabase or fallback
       const { data, error } = await supabaseClient
         .from("stories")
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setStories(data);
-      } else {
-        const local = await db.getAllStories();
-        setStories(local);
       }
     } catch (err) {
       console.error("Error loading founder stories:", err);
-      const local = await db.getAllStories();
-      setStories(local);
     } finally {
       setLoadingStories(false);
     }
@@ -93,14 +87,10 @@ export default function FounderDashboardPage() {
 
     setActionId(storyId);
     try {
-      const { error } = await supabaseClient
+      await supabaseClient
         .from("stories")
         .update({ status: "REVOKED", updated_at: new Date().toISOString() })
         .eq("id", storyId);
-
-      if (error) {
-        await db.revokeStory(storyId);
-      }
 
       setStories((prev) =>
         prev.map((s) => (s.id === storyId ? { ...s, status: "REVOKED" } : s))
@@ -112,17 +102,41 @@ export default function FounderDashboardPage() {
     }
   };
 
+
   const handleSignOut = async () => {
     await supabaseClient.auth.signOut();
     setUser(null);
     router.push("/founder");
   };
 
+  const [activeQrStory, setActiveQrStory] = useState<Story | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyLink = (storyId: string) => {
+    const url = `${window.location.origin}/story/${storyId}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(storyId);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  const handleDemoSignIn = () => {
+    const demoUser = {
+      id: "demo-dawit-id",
+      email: "dawit.alemu@workshop.et",
+      user_metadata: { full_name: "Dawit Alemu" },
+      app_metadata: {},
+      aud: "authenticated",
+      created_at: new Date().toISOString(),
+    } as User;
+    setUser(demoUser);
+    loadFounderStories(demoUser);
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
         <div className="flex items-center gap-3 text-indigo-400 font-medium">
-          <RefreshCw className="w-5 h-5 animate-spin" /> Loading Founder Dashboard...
+          <RefreshCw className="w-5 h-5 animate-spin" /> Loading Publisher Story Storage...
         </div>
       </div>
     );
@@ -131,20 +145,31 @@ export default function FounderDashboardPage() {
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-12 px-4">
-        <div className="max-w-md w-full bg-slate-900/40 border border-slate-800 rounded-3xl p-8 text-center space-y-6">
+        <div className="max-w-md w-full bg-slate-900/40 border border-slate-800 rounded-3xl p-8 text-center space-y-6 shadow-2xl">
           <div className="w-16 h-16 bg-indigo-500/10 border border-indigo-500/20 rounded-full flex items-center justify-center mx-auto text-indigo-400">
             <Shield className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-bold">Founder Authentication Required</h2>
-          <p className="text-slate-400 text-sm">
-            Please sign in to access your founder dashboard and manage your impact stories.
+          <h2 className="text-2xl font-extrabold text-white">Publisher Story Storage</h2>
+          <p className="text-slate-400 text-sm leading-relaxed">
+            Access your story storage to view generated QR codes, manage visibility, and review published impact stories.
           </p>
-          <Link
-            href="/founder"
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3.5 px-6 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg"
-          >
-            Sign In on Founder Portal
-          </Link>
+
+          <div className="space-y-3">
+            <Link
+              href="/founder"
+              className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3.5 px-6 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg"
+            >
+              Sign In with Google
+            </Link>
+
+            <button
+              onClick={handleDemoSignIn}
+              type="button"
+              className="w-full bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-semibold py-3.5 px-6 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all"
+            >
+              <Shield className="w-4 h-4" /> Continue as Dawit Alemu (Demo Publisher)
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -197,7 +222,7 @@ export default function FounderDashboardPage() {
         {/* Dashboard Section Title */}
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-indigo-400" /> My Impact Stories
+            <Shield className="w-5 h-5 text-indigo-400" /> Story Storage & QR Manager
           </h2>
           <span className="text-xs text-slate-400">
             {stories.length} story record(s)
@@ -207,11 +232,11 @@ export default function FounderDashboardPage() {
         {/* Stories List */}
         {loadingStories ? (
           <div className="p-12 text-center text-slate-400 text-sm flex items-center justify-center gap-2">
-            <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" /> Loading your stories...
+            <RefreshCw className="w-4 h-4 animate-spin text-indigo-400" /> Loading story storage...
           </div>
         ) : stories.length === 0 ? (
           <div className="bg-slate-900/30 border border-slate-800 rounded-3xl p-12 text-center space-y-4">
-            <p className="text-slate-400 text-sm">You haven&apos;t published any impact stories yet.</p>
+            <p className="text-slate-400 text-sm">No stories in storage yet.</p>
             <Link
               href="/founder"
               className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 px-6 rounded-2xl text-xs transition-all"
@@ -283,9 +308,10 @@ export default function FounderDashboardPage() {
 
                     {story.donor_email && (
                       <div className="text-[11px] text-slate-400 bg-slate-950/60 p-2.5 rounded-xl border border-slate-800/80 truncate">
-                        Assigned Donor: <strong className="text-slate-300">{story.donor_name || "Donor"}</strong> ({story.donor_email})
+                        Assigned Donor Email: <strong className="text-slate-300">{story.donor_email}</strong>
                       </div>
                     )}
+
                   </div>
 
                   {/* Actions */}
@@ -299,18 +325,19 @@ export default function FounderDashboardPage() {
                           <ExternalLink className="w-3.5 h-3.5" /> View Story
                         </Link>
 
+                        <button
+                          onClick={() => setActiveQrStory(story)}
+                          type="button"
+                          className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 py-2 px-3 rounded-xl text-xs flex items-center gap-1 transition-colors"
+                        >
+                          <QrCode className="w-3.5 h-3.5" /> Story QR
+                        </button>
+
                         <Link
                           href={`/founder/review/${story.id}`}
                           className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl text-xs flex items-center gap-1 transition-colors"
                         >
                           <Edit3 className="w-3.5 h-3.5" /> Review
-                        </Link>
-
-                        <Link
-                          href={`/certificate/${story.certificate_id}`}
-                          className="bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 px-3 rounded-xl text-xs flex items-center gap-1 transition-colors"
-                        >
-                          <QrCode className="w-3.5 h-3.5" /> QR
                         </Link>
                       </>
                     )}
@@ -329,7 +356,7 @@ export default function FounderDashboardPage() {
                         href={`/certificate/${story.certificate_id}`}
                         className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Certificate Still Valid (On-Chain)
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Certificate Intact On-Chain
                       </Link>
                     )}
                   </div>
@@ -338,7 +365,64 @@ export default function FounderDashboardPage() {
             })}
           </div>
         )}
+
+        {/* QR Code Modal for Story Storage */}
+        {activeQrStory && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-sm w-full space-y-6 text-center shadow-2xl relative animate-[fadeIn_0.2s_ease-out]">
+              <button
+                onClick={() => setActiveQrStory(null)}
+                className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-full bg-slate-800 hover:bg-slate-700 transition-colors"
+              >
+                ✕
+              </button>
+
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white">Story QR Code</h3>
+                <p className="text-xs text-slate-400">
+                  Scan to land directly on {activeQrStory.founder_name}&apos;s story
+                </p>
+              </div>
+
+              {/* QR Image */}
+              <div className="p-4 bg-white rounded-2xl inline-block mx-auto shadow-xl">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(
+                    typeof window !== "undefined"
+                      ? `${window.location.origin}/story/${activeQrStory.id}`
+                      : `/story/${activeQrStory.id}`
+                  )}`}
+                  alt="Story QR Code"
+                  className="w-48 h-48 object-contain"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="text-[11px] text-slate-400 truncate bg-slate-950 p-2.5 rounded-xl border border-slate-800 font-mono">
+                  {typeof window !== "undefined" ? `${window.location.origin}/story/${activeQrStory.id}` : `/story/${activeQrStory.id}`}
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleCopyLink(activeQrStory.id)}
+                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors"
+                  >
+                    {copiedId === activeQrStory.id ? "Copied Link!" : "Copy Story Link"}
+                  </button>
+                  <Link
+                    href={`/story/${activeQrStory.id}`}
+                    className="bg-slate-800 hover:bg-slate-700 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition-colors flex items-center justify-center gap-1"
+                  >
+                    Open <ExternalLink className="w-3 h-3" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+

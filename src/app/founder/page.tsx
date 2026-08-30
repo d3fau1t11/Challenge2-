@@ -363,10 +363,28 @@ export default function FounderPage() {
             </svg>
             Sign in with Google
           </button>
+
+          <button
+            onClick={() =>
+              setUser({
+                id: "demo-dawit-id",
+                email: "dawit.alemu@workshop.et",
+                user_metadata: { full_name: "Dawit Alemu" },
+                app_metadata: {},
+                aud: "authenticated",
+                created_at: new Date().toISOString(),
+              } as User)
+            }
+            type="button"
+            className="w-full bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-semibold py-3.5 px-6 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all"
+          >
+            <Shield className="w-4 h-4" /> Continue as Dawit Alemu (Demo Founder)
+          </button>
         </div>
       </div>
     );
   }
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-12 px-4 sm:px-6">
@@ -637,29 +655,18 @@ export default function FounderPage() {
             </div>
 
             {visibility === "donor_only" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-slate-300">Donor Name</label>
-                  <input
-                    type="text"
-                    value={donorName}
-                    onChange={(e) => setDonorName(e.target.value)}
-                    placeholder="e.g. Anna Beier"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-medium text-slate-300">Donor Email</label>
-                  <input
-                    type="email"
-                    value={donorEmail}
-                    onChange={(e) => setDonorEmail(e.target.value)}
-                    placeholder="e.g. anna@example.com"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
-                  />
-                </div>
+              <div className="pt-2 space-y-1.5">
+                <label className="text-[11px] font-medium text-slate-300">Donor Email</label>
+                <input
+                  type="email"
+                  value={donorEmail}
+                  onChange={(e) => setDonorEmail(e.target.value)}
+                  placeholder="e.g. anna@example.com"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-xs focus:outline-none focus:border-indigo-500 transition-colors"
+                />
               </div>
             )}
+
           </div>
 
           {/* Consent */}
