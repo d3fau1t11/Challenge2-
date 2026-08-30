@@ -33,6 +33,8 @@ create table if not exists public.stories (
   founder_name text not null,
   voice_url text not null,
   video_url text not null,
+  media jsonb not null default '[]'::jsonb,
+  ai_source text not null default 'fallback',
   amharic_transcript text not null,
   english_translation text not null,
   generated_story text not null,
@@ -40,6 +42,7 @@ create table if not exists public.stories (
   scenes jsonb not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
+
 
 -- Enable RLS (Read-only public access)
 alter table public.stories enable row level security;
