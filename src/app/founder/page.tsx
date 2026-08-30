@@ -196,10 +196,12 @@ export default function FounderPage() {
       }
 
       setTimeout(() => router.push(`/story/${data.storyId}`), 1000);
-    } catch (err) {
+    } catch (err: any) {
       clearInterval(progressInterval);
       setIsSubmitting(false);
-      setError(err instanceof Error ? err.message : "An error occurred while generating the story.");
+      const msg = err instanceof Error ? err.message : typeof err === "string" ? err : String(err?.error || err || "");
+      const cleanMsg = msg && msg.trim() !== "" && msg !== "<none>" ? msg : "An error occurred while generating the story.";
+      setError(cleanMsg);
     }
   };
 

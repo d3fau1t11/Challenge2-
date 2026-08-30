@@ -183,15 +183,23 @@ export async function POST(req: NextRequest) {
       aiSource,
       narrationConsented: consentNarration,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Critical error in story generation pipeline:", error);
+    let errorMessage = "An unexpected error occurred in the story generation pipeline.";
+    if (error instanceof Error && error.message) {
+      errorMessage = error.message;
+    } else if (typeof error === "object" && error !== null && error.message) {
+      errorMessage = String(error.message);
+    } else if (typeof error === "string" && error.trim()) {
+      errorMessage = error;
+    }
+
+    if (!errorMessage || errorMessage.trim() === "" || errorMessage === "<none>") {
+      errorMessage = "An unexpected error occurred in the story generation pipeline.";
+    }
+
     return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "An unexpected error occurred in the story generation pipeline.",
-      },
+      { error: errorMessage },
       { status: 500 }
     );
   }
