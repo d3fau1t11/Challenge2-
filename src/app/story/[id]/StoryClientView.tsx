@@ -55,6 +55,11 @@ export default function StoryClientView({
   const [duration, setDuration] = useState(0);
   const [copied, setCopied] = useState(false);
 
+  // RAF-based timer drives captions when no media element fires onTimeUpdate
+  // (e.g. device voice, or narration audio with photos-only).
+  const rafRef = useRef<number | null>(null);
+  const playStartRef = useRef<number>(0);
+
   // Amharic is the default and the primary track. It is what plays on load.
   const [lang, setLang] = useState<Lang>("am");
   const [narrationList, setNarrationList] = useState<Narration[]>(narrations);
@@ -114,6 +119,7 @@ export default function StoryClientView({
     return () => {
       cancelSpeech();
       clearStallTimer();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, []);
 
@@ -152,9 +158,28 @@ export default function StoryClientView({
       .finally(() => setPreparing(false));
   }, [isRealStory, narrationAllowed, narrationList.length, story.id]);
 
+  const stopRafTimer = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
+
+  const startRafTimer = useCallback(() => {
+    stopRafTimer();
+    playStartRef.current = performance.now();
+    const tick = () => {
+      const elapsed = (performance.now() - playStartRef.current) / 1000;
+      setCurrentTime(elapsed);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, [stopRafTimer]);
+
   const stopEverything = useCallback(() => {
     clearStallTimer();
     cancelSpeech();
+    stopRafTimer();
 
     if (audioRef.current) {
       audioRef.current.pause();
@@ -168,7 +193,7 @@ export default function StoryClientView({
       videoRef.current.pause();
       videoRef.current.currentTime = 0;
     }
-  }, []);
+  }, [stopRafTimer]);
 
   // If the founder himself revoked, there is no story to show at all
   if (founderRestricted) {
@@ -202,14 +227,32 @@ export default function StoryClientView({
     );
   }
 
-  // Captions come from whichever track is selected. Never Amharic timings on a
-  // translated track — the timelines do not correspond.
+  // Captions come from whichever track is selected. Fall back to story.captions
+  // so English/Dutch in-video captions are always displayed during playback.
   const captionSource =
-    lang === "am" ? story.captions : activeNarration?.captions;
+    lang === "am"
+      ? story.captions
+      : activeNarration?.captions && activeNarration.captions.length > 0
+      ? activeNarration.captions
+      : story.captions;
 
-  const activeCaption = captionSource?.find(
-    (c) => currentTime >= c.start && currentTime <= c.end
-  );
+  // Time-based lookup first; if nothing matches (gap between cues), use
+  // position-based index so there is always a visible caption while playing.
+  const activeCaption = (() => {
+    if (!captionSource || captionSource.length === 0) return null;
+    const exact = captionSource.find(
+      (c) => currentTime >= c.start && currentTime <= c.end
+    );
+    if (exact) return exact;
+    // Between cues — pick the closest preceding one
+    const totalDur = duration || captionSource[captionSource.length - 1]?.end || 15;
+    const idx = Math.min(
+      captionSource.length - 1,
+      Math.floor((currentTime / Math.max(1, totalDur)) * captionSource.length)
+    );
+    return captionSource[idx] || null;
+  })();
+
 
   // Which photo shows right now: divide the clip evenly across them
   const photoIndex =
@@ -237,9 +280,10 @@ export default function StoryClientView({
     setDeviceVoice(true);
     setIsPlaying(true);
 
-    // The device voice cannot drive caption timing, so we show the full text
-    // as a static block instead. Do not fake timings.
+    // Drive captions with a RAF timer so they advance in real-time
+    // even though the device voice can't report its position.
     setCurrentTime(0);
+    startRafTimer();
 
     if (videoRef.current) {
       videoRef.current.muted = true;
@@ -402,11 +446,17 @@ export default function StoryClientView({
               <video
                 ref={videoRef}
                 src={videoItem.url}
-                onTimeUpdate={() =>
-                  lang === "am" && videoRef.current && setCurrentTime(videoRef.current.currentTime)
-                }
+                onTimeUpdate={() => {
+                  if (!videoRef.current) return;
+                  // Always update currentTime from the video when it is the
+                  // primary media (Amharic) — for translated tracks, narration
+                  // audio drives time instead via its own onTimeUpdate.
+                  if (lang === "am") {
+                    setCurrentTime(videoRef.current.currentTime);
+                  }
+                }}
                 onLoadedMetadata={() =>
-                  lang === "am" && videoRef.current && setDuration(videoRef.current.duration || 0)
+                  videoRef.current && setDuration(videoRef.current.duration || 0)
                 }
                 onEnded={() => lang === "am" && setIsPlaying(false)}
                 playsInline
@@ -447,10 +497,12 @@ export default function StoryClientView({
               </button>
             </div>
 
-            {/* Timed cues, but never while the device voice is speaking — it
-                cannot drive caption timing and faking it would be dishonest. */}
-            {isPlaying && !deviceVoice && activeCaption && (
-              <div className="absolute bottom-4 left-4 right-4 bg-slate-950/80 backdrop-blur-sm border border-slate-800 text-white text-xs px-3 py-2 rounded-xl text-center font-medium shadow-md">
+            {/* Timed in-video captions overlay — always visible during playback */}
+            {isPlaying && activeCaption && (
+              <div className="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md border border-indigo-500/30 text-white text-xs px-3.5 py-2.5 rounded-xl text-center font-medium shadow-xl z-20 animate-[fadeIn_0.2s_ease-out]">
+                <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider block mb-0.5">
+                  {lang === "am" ? "አማርኛ Captions" : lang === "de" ? "Deutsch / Dutch" : "English"}
+                </span>
                 {activeCaption.text}
               </div>
             )}
