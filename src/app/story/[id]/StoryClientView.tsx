@@ -21,8 +21,7 @@ import {
 import { Certificate, Story, Consent, Narration } from "@/lib/db";
 import { speak, cancelSpeech, speechSupported, onVoicesReady } from "@/lib/speechFallback";
 
-type Lang = "am" | "om" | "ti" | "en" | "de";
-
+type Lang = "am" | "en" | "de";
 
 interface StoryClientViewProps {
   story: Story;
@@ -538,13 +537,10 @@ export default function StoryClientView({
   };
 
   const pills: Array<{ code: Lang; label: string; sub: string }> = [
-    { code: "am", label: "አማርኛ", sub: "Amharic" },
-    { code: "om", label: "ኦሮምኛ", sub: "Oromo" },
-    { code: "ti", label: "ትግርኛ", sub: "Tigrinya" },
+    { code: "am", label: "አማርኛ", sub: "Original" },
     { code: "en", label: "English", sub: "Translated" },
-    { code: "de", label: "Deutsch", sub: "Germany" },
+    { code: "de", label: "Deutsch", sub: "Translated" },
   ];
-
 
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-10 px-4">
@@ -665,17 +661,8 @@ export default function StoryClientView({
             {isPlaying && activeCaption && (
               <div className="absolute bottom-4 left-4 right-4 bg-slate-950/90 backdrop-blur-md border border-indigo-500/30 text-white text-xs px-3.5 py-2.5 rounded-xl text-center font-medium shadow-xl z-20 animate-[fadeIn_0.2s_ease-out]">
                 <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-wider block mb-0.5">
-                  {lang === "am"
-                    ? "አማርኛ Captions"
-                    : lang === "om"
-                    ? "ኦሮምኛ Captions"
-                    : lang === "ti"
-                    ? "ትግርኛ Captions"
-                    : lang === "de"
-                    ? "Deutsch / Germany Captions"
-                    : "English Captions"}
+                  {lang === "am" ? "አማርኛ Captions" : lang === "de" ? "Deutsch / Dutch" : "English"}
                 </span>
-
                 {activeCaption.text}
               </div>
             )}

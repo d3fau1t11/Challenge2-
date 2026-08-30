@@ -70,7 +70,7 @@ export interface Consent {
 export interface Narration {
   id: string;
   story_id: string;
-  lang: "en" | "de" | "om" | "ti";
+  lang: "en" | "de";
   text: string;
   audio_url: string | null;
   captions: Array<{ start: number; end: number; text: string }>;
@@ -79,7 +79,6 @@ export interface Narration {
   source: "live" | "fallback";
   created_at: string;
 }
-
 
 // Check environment variables
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -453,11 +452,10 @@ export const db = {
     }
   },
 
-  getNarration: async (storyId: string, lang: "en" | "de" | "om" | "ti"): Promise<Narration | null> => {
+  getNarration: async (storyId: string, lang: "en" | "de"): Promise<Narration | null> => {
     const rows = await db.getNarrations(storyId);
     return rows.find((n) => n.lang === lang) || null;
   },
-
 
   upsertNarration: async (row: Omit<Narration, 'id' | 'created_at'>): Promise<Narration> => {
     if (isSupabaseConfigured && supabase) {

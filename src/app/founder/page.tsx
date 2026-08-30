@@ -448,10 +448,8 @@ export default function FounderPage() {
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
               >
                 <option value="am">Amharic (አማርኛ)</option>
-                <option value="om">Afaan Oromo (ኦሮምኛ)</option>
-                <option value="ti">Tigrinya (ትግርኛ)</option>
+                <option value="om">Afaan Oromo</option>
                 <option value="en">English</option>
-                <option value="de">German (Deutsch / Germany)</option>
               </select>
             </div>
           </div>
