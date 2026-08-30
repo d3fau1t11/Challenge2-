@@ -149,10 +149,11 @@ export default function FounderDashboardPage() {
           <div className="w-16 h-16 bg-indigo-500/10 border border-indigo-500/20 rounded-full flex items-center justify-center mx-auto text-indigo-400">
             <Shield className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-extrabold text-white">Publisher Story Storage</h2>
+          <h2 className="text-2xl font-extrabold text-white">TrueImpact Story Storage</h2>
           <p className="text-slate-400 text-sm leading-relaxed">
-            Access your story storage to view generated QR codes, manage visibility, and review published impact stories.
+            Access TrueImpact story storage to view generated QR codes, manage visibility, and review published impact stories.
           </p>
+
 
           <div className="space-y-3">
             <Link
@@ -222,8 +223,9 @@ export default function FounderDashboardPage() {
         {/* Dashboard Section Title */}
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-            <Shield className="w-5 h-5 text-indigo-400" /> Story Storage & QR Manager
+            <Shield className="w-5 h-5 text-indigo-400" /> TrueImpact Story Storage & QR Manager
           </h2>
+
           <span className="text-xs text-slate-400">
             {stories.length} story record(s)
           </span>

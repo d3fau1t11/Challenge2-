@@ -170,7 +170,15 @@ export default async function CertificatePage({ params }: PageProps) {
               >
                 View Story Directly <ExternalLink className="w-3.5 h-3.5" />
               </Link>
+
+              <Link
+                href="/scan"
+                className="w-full bg-slate-900 hover:bg-slate-850 text-indigo-300 border border-slate-800 font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <QrCode className="w-3.5 h-3.5 text-indigo-400" /> Open Camera Scanner
+              </Link>
             </div>
+
 
           </div>
 

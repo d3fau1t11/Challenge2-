@@ -90,9 +90,10 @@ export default function FounderPage() {
     "Uploading media to secure off-chain storage...",
     "Transcribing the Amharic voice note...",
     "Translating transcription to English...",
-    "NVIDIA Nemotron-3 analyzing workshop scenes...",
+    "Processing workshop media and audio...",
     "Generating story draft for review...",
   ];
+
 
   const handleAudioFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);
@@ -326,11 +327,12 @@ export default function FounderPage() {
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-2xl font-extrabold text-white">Founder Portal Authentication</h1>
+            <h1 className="text-2xl font-extrabold text-white">TrueImpact Founder Portal</h1>
             <p className="text-slate-400 text-sm leading-relaxed">
               Only authenticated founders can upload and manage impact stories. Please sign in with Google to access the management portal.
             </p>
           </div>
+
 
           {error && (
             <div className="bg-rose-500/10 border border-rose-500/20 text-rose-300 px-4 py-3 rounded-2xl text-sm">

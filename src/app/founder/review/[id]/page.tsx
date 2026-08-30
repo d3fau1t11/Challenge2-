@@ -197,24 +197,7 @@ export default function ReviewStoryPage({ params }: { params: Promise<{ id: stri
           />
         </div>
 
-        {/* Detected Scenes (NVIDIA Nemotron-3 Omni) */}
-        {story.scenes && story.scenes.length > 0 && (
-          <div className="space-y-3">
-            <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-              <Zap className="w-4 h-4 text-amber-400" /> NVIDIA Nemotron Video Scenes
-            </div>
-            <div className="space-y-2">
-              {story.scenes.map((scene, idx) => (
-                <div key={idx} className="bg-slate-950/60 border border-slate-800/80 rounded-xl p-3 text-xs flex items-center justify-between gap-3">
-                  <span className="text-slate-300">{scene.description}</span>
-                  <span className="text-[10px] font-mono bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 px-2 py-0.5 rounded-full flex-shrink-0">
-                    {scene.start}s - {scene.end}s ({scene.importance})
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+
 
         {/* Visibility Controls */}
         <div className="bg-slate-950/60 border border-slate-800/80 rounded-2xl p-5 space-y-4">

@@ -14,8 +14,9 @@ export default function Home() {
         
         {/* Badge */}
         <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs px-4 py-1.5 rounded-full font-bold uppercase tracking-widest">
-          <ShieldCheck className="w-4 h-4" /> ImpactProtocol Ecosystem
+          <ShieldCheck className="w-4 h-4" /> TrueImpact Platform
         </div>
+
 
         {/* Title */}
         <div className="space-y-4">
@@ -79,13 +80,31 @@ export default function Home() {
             <ShieldCheck className="w-4 h-4 text-indigo-400" /> Founder Dashboard
           </Link>
 
+          {/* Browse All Stories & QR Certs Link */}
+          <Link
+            href="/stories"
+            className="w-full sm:w-auto bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-bold py-4 px-8 rounded-2xl text-sm flex items-center justify-center gap-2 transition-all shadow-lg"
+          >
+            <QrCode className="w-4 h-4 text-indigo-400" /> Browse All Stories & QR Certs
+          </Link>
+
+          {/* Scan QR Code button */}
+          <Link
+            href="/scan"
+            className="w-full sm:w-auto bg-slate-900 border border-emerald-500/30 text-emerald-300 hover:bg-slate-850 font-bold py-4 px-8 rounded-2xl text-sm flex items-center justify-center gap-2 hover:border-emerald-500/50 active:scale-[0.98] transition-all shadow-lg"
+          >
+            <QrCode className="w-4 h-4 text-emerald-400" /> Scan QR Code
+          </Link>
+
+
           {/* Certificate Demo Link */}
           <Link
             href="/certificate/demo-cert"
             className="w-full sm:w-auto bg-slate-900 border border-slate-800 hover:bg-slate-850 text-slate-200 font-bold py-4 px-8 rounded-2xl text-sm flex items-center justify-center gap-2 hover:border-slate-700 active:scale-[0.98] transition-all"
           >
-            <QrCode className="w-4 h-4 text-emerald-400" /> View Certificate
+            View Certificate
           </Link>
+
 
         </div>
       </main>

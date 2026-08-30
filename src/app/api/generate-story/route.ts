@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { addisai } from "@/lib/addisai";
-import { nvidia } from "@/lib/nvidia";
+
 
 
 export interface MediaItem {
@@ -108,13 +108,9 @@ export async function POST(req: NextRequest) {
     const captions = await addisai.generateCaptions(translation.text, duration);
     console.log("Captions generated.");
 
-    // NVIDIA Nemotron-3 Nano Omni scene analysis
-    const mediaUrls = media.map((m) => m.url);
-    const scenes = await nvidia.analyzeWorkshopMedia(mediaUrls, milestone);
-    console.log("NVIDIA Nemotron scene analysis completed.");
-
     const aiSource: "live" | "fallback" =
       transcription.live && translation.live && story.live ? "live" : "fallback";
+
 
     // --- Layer 1: anonymous on-chain certificate ---
     // Hash the anonymised fields so the value is defensible, not random.
@@ -156,8 +152,9 @@ export async function POST(req: NextRequest) {
       english_translation: translation.text,
       generated_story: story.text,
       captions,
-      scenes,
+      scenes: [],
     });
+
 
     console.log(`Story record created. ID: ${savedStory.id} (Status: READY_FOR_REVIEW, Visibility: ${visibility})`);
 
