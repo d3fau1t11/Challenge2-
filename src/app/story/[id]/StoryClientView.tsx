@@ -1,24 +1,77 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { Play, Pause, Share2, Shield, ArrowLeft, Landmark, Check, AlertTriangle, ExternalLink, Zap } from "lucide-react";
-import { Certificate, Story, Consent } from "@/lib/db";
+import {
+  Play,
+  Pause,
+  Share2,
+  Shield,
+  ArrowLeft,
+  Landmark,
+  Check,
+  AlertTriangle,
+  ExternalLink,
+  Zap,
+  Volume2,
+  WifiOff,
+  FileText,
+  Loader2,
+} from "lucide-react";
+import { Certificate, Story, Consent, Narration } from "@/lib/db";
+import { speak, cancelSpeech, speechSupported, onVoicesReady } from "@/lib/speechFallback";
+
+type Lang = "am" | "en" | "de";
 
 interface StoryClientViewProps {
   story: Story;
   certificate: Certificate;
   consents: Consent[];
+  narrations?: Narration[];
+  narrationAllowed?: boolean;
+  isRealStory?: boolean;
 }
 
-export default function StoryClientView({ story, certificate, consents }: StoryClientViewProps) {
+// The disclosure paragraph. Visible text under the player, never a tooltip.
+// This single paragraph does more for the trust criterion than the rest of the
+// feature put together.
+function disclosureFor(lang: Lang, founder: string): string {
+  if (lang === "en") {
+    return `English (translated). ${founder} recorded this in Amharic. The English you are hearing was translated by machine and read by a synthetic narrator — it is not his voice. Switch to አማርኛ to hear him.`;
+  }
+  return `Deutsch (Übersetzung). ${founder} hat dies auf Amharisch aufgenommen. Der deutsche Text wurde maschinell übersetzt und von einer synthetischen Stimme gelesen — es ist nicht seine Stimme. Wechseln Sie zu አማርኛ, um ihn zu hören.`;
+}
+
+export default function StoryClientView({
+  story,
+  certificate,
+  consents,
+  narrations = [],
+  narrationAllowed = true,
+  isRealStory = false,
+}: StoryClientViewProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [copied, setCopied] = useState(false);
 
+  // Amharic is the default and the primary track. It is what plays on load.
+  const [lang, setLang] = useState<Lang>("am");
+  const [narrationList, setNarrationList] = useState<Narration[]>(narrations);
+  const [preparing, setPreparing] = useState(false);
+  const [deviceVoice, setDeviceVoice] = useState(false);
+  const [, setVoicesTick] = useState(0);
+  // speechSynthesis only exists in the browser; gate on this so the server and
+  // the first client render agree.
+  const [mounted, setMounted] = useState(false);
+
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const narrationRef = useRef<HTMLAudioElement | null>(null);
+  const stallTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const activeNarration =
+    lang === "am" ? null : narrationList.find((n) => n.lang === lang) || null;
 
   // Media resolution: fall back to the legacy single video_url field
   const media =
@@ -39,6 +92,83 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
 
   const founderRestricted = restrictedPeople.includes(story.founder_name);
   const anyoneRestricted = restrictedPeople.length > 0;
+
+  const clearStallTimer = () => {
+    if (stallTimer.current) {
+      clearTimeout(stallTimer.current);
+      stallTimer.current = null;
+    }
+  };
+
+  // Chrome populates the voice list asynchronously
+  useEffect(() => {
+    // queueMicrotask keeps this out of the synchronous effect body
+    queueMicrotask(() => setMounted(true));
+    const off = onVoicesReady(() => setVoicesTick((t) => t + 1));
+    return off;
+  }, []);
+
+  // Always cancel speech on unmount, or a language switch leaves a voice
+  // talking over the next thing.
+  useEffect(() => {
+    return () => {
+      cancelSpeech();
+      clearStallTimer();
+    };
+  }, []);
+
+  // Lazy catch-up: if the permission is on but no rows exist (the founder
+  // closed the tab before the background requests finished), generate once.
+  // sessionStorage-debounced so a judge's refresh does not re-trigger it, and
+  // guarded on isRealStory so /story/anything fires nothing.
+  useEffect(() => {
+    if (!isRealStory || !narrationAllowed) return;
+    if (narrationList.length > 0) return;
+    if (typeof window === "undefined") return;
+
+    const key = `narration-triggered:${story.id}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+
+    queueMicrotask(() => setPreparing(true));
+    Promise.allSettled(
+      (["en", "de"] as const).map((l) =>
+        fetch("/api/narration", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storyId: story.id, lang: l }),
+        })
+      )
+    )
+      .then(async () => {
+        const res = await fetch(`/api/narration?storyId=${story.id}`);
+        if (!res.ok) return;
+        const json = await res.json();
+        if (json.allowed && Array.isArray(json.narrations)) {
+          setNarrationList(json.narrations);
+        }
+      })
+      .catch((e) => console.error("Lazy narration catch-up failed:", e))
+      .finally(() => setPreparing(false));
+  }, [isRealStory, narrationAllowed, narrationList.length, story.id]);
+
+  const stopEverything = useCallback(() => {
+    clearStallTimer();
+    cancelSpeech();
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    if (narrationRef.current) {
+      narrationRef.current.pause();
+      narrationRef.current.currentTime = 0;
+    }
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.currentTime = 0;
+    }
+  }, []);
 
   // If the founder himself revoked, there is no story to show at all
   if (founderRestricted) {
@@ -72,7 +202,12 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
     );
   }
 
-  const activeCaption = story.captions?.find(
+  // Captions come from whichever track is selected. Never Amharic timings on a
+  // translated track — the timelines do not correspond.
+  const captionSource =
+    lang === "am" ? story.captions : activeNarration?.captions;
+
+  const activeCaption = captionSource?.find(
     (c) => currentTime >= c.start && currentTime <= c.end
   );
 
@@ -82,17 +217,113 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
       ? Math.min(photos.length - 1, Math.floor((currentTime / duration) * photos.length))
       : 0;
 
+  const startDeviceVoice = (narration: Narration) => {
+    clearStallTimer();
+    if (narrationRef.current) narrationRef.current.pause();
+
+    const ok = speak(narration.text, narration.lang, {
+      onEnd: () => {
+        setIsPlaying(false);
+        if (videoRef.current) videoRef.current.pause();
+      },
+      onError: () => setIsPlaying(false),
+    });
+
+    if (!ok) {
+      setIsPlaying(false);
+      return;
+    }
+
+    setDeviceVoice(true);
+    setIsPlaying(true);
+
+    // The device voice cannot drive caption timing, so we show the full text
+    // as a static block instead. Do not fake timings.
+    setCurrentTime(0);
+
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.loop = true;
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
+  const selectLang = (next: Lang) => {
+    if (next === lang) return;
+
+    // Never carry a play position across languages.
+    stopEverything();
+    setLang(next);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsPlaying(false);
+    setDeviceVoice(false);
+  };
+
   const togglePlay = () => {
-    const el = videoItem ? videoRef.current : audioRef.current;
-    if (!el) return;
+    // --- Amharic: the original recording, exactly as before ---
+    if (lang === "am") {
+      const el = videoItem ? videoRef.current : audioRef.current;
+      if (!el) return;
+
+      if (videoRef.current) {
+        videoRef.current.muted = false;
+        videoRef.current.loop = false;
+      }
+
+      if (isPlaying) {
+        el.pause();
+        setIsPlaying(false);
+      } else {
+        el.play().catch(() => {});
+        setIsPlaying(true);
+      }
+      return;
+    }
+
+    // --- Translated track ---
+    const narration = activeNarration;
+    if (!narration) return;
 
     if (isPlaying) {
-      el.pause();
+      clearStallTimer();
+      cancelSpeech();
+      narrationRef.current?.pause();
+      videoRef.current?.pause();
       setIsPlaying(false);
-    } else {
-      el.play().catch(() => {});
-      setIsPlaying(true);
+      return;
     }
+
+    // No audio file, or we already fell back: read it on the device.
+    // Called from the button's handler chain so iOS allows it.
+    if (!narration.audio_url || deviceVoice) {
+      startDeviceVoice(narration);
+      return;
+    }
+
+    const el = narrationRef.current;
+    if (!el) return;
+
+    // The video and the narration have different lengths. Play the video muted
+    // and looping rather than trying to stretch it — nobody will notice, and
+    // precise sync is not worth the time.
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      videoRef.current.loop = true;
+      videoRef.current.play().catch(() => {});
+    }
+
+    setIsPlaying(true);
+    el.play().catch(() => startDeviceVoice(narration));
+
+    // If it has not actually started moving in 4 seconds, the network is gone.
+    clearStallTimer();
+    stallTimer.current = setTimeout(() => {
+      if (el.currentTime === 0) {
+        console.warn("Narration audio stalled — falling back to the device voice.");
+        startDeviceVoice(narration);
+      }
+    }, 4000);
   };
 
   const handleShare = () => {
@@ -101,14 +332,44 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const pills: Array<{ code: Lang; label: string; sub: string }> = [
+    { code: "am", label: "አማርኛ", sub: "Original" },
+    { code: "en", label: "English", sub: "Translated" },
+    { code: "de", label: "Deutsch", sub: "Translated" },
+  ];
+
   return (
     <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center py-10 px-4">
+      {/* Amharic — the real recording */}
       <audio
         ref={audioRef}
         src={story.voice_url}
-        onTimeUpdate={() => audioRef.current && setCurrentTime(audioRef.current.currentTime)}
-        onLoadedMetadata={() => audioRef.current && setDuration(audioRef.current.duration || 0)}
+        onTimeUpdate={() =>
+          lang === "am" && audioRef.current && setCurrentTime(audioRef.current.currentTime)
+        }
+        onLoadedMetadata={() =>
+          lang === "am" && audioRef.current && setDuration(audioRef.current.duration || 0)
+        }
         onEnded={() => setIsPlaying(false)}
+        className="hidden"
+      />
+
+      {/* Translated narration — synthetic voice, separate element */}
+      <audio
+        ref={narrationRef}
+        src={activeNarration?.audio_url || undefined}
+        onTimeUpdate={() =>
+          narrationRef.current && setCurrentTime(narrationRef.current.currentTime)
+        }
+        onLoadedMetadata={() =>
+          narrationRef.current && setDuration(narrationRef.current.duration || 0)
+        }
+        onPlaying={() => clearStallTimer()}
+        onError={() => activeNarration && startDeviceVoice(activeNarration)}
+        onEnded={() => {
+          setIsPlaying(false);
+          videoRef.current?.pause();
+        }}
         className="hidden"
       />
 
@@ -141,9 +402,13 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
               <video
                 ref={videoRef}
                 src={videoItem.url}
-                onTimeUpdate={() => videoRef.current && setCurrentTime(videoRef.current.currentTime)}
-                onLoadedMetadata={() => videoRef.current && setDuration(videoRef.current.duration || 0)}
-                onEnded={() => setIsPlaying(false)}
+                onTimeUpdate={() =>
+                  lang === "am" && videoRef.current && setCurrentTime(videoRef.current.currentTime)
+                }
+                onLoadedMetadata={() =>
+                  lang === "am" && videoRef.current && setDuration(videoRef.current.duration || 0)
+                }
+                onEnded={() => lang === "am" && setIsPlaying(false)}
                 playsInline
                 onClick={togglePlay}
                 className={`w-full h-full object-cover cursor-pointer ${
@@ -182,7 +447,9 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
               </button>
             </div>
 
-            {isPlaying && activeCaption && (
+            {/* Timed cues, but never while the device voice is speaking — it
+                cannot drive caption timing and faking it would be dishonest. */}
+            {isPlaying && !deviceVoice && activeCaption && (
               <div className="absolute bottom-4 left-4 right-4 bg-slate-950/80 backdrop-blur-sm border border-slate-800 text-white text-xs px-3 py-2 rounded-xl text-center font-medium shadow-md">
                 {activeCaption.text}
               </div>
@@ -203,6 +470,109 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
           )}
         </div>
 
+        {/* ---------- Language toggle ---------- */}
+        {narrationAllowed && (
+          <div className="px-6 space-y-3">
+            <div className="flex gap-2">
+              {pills.map((pill) => {
+                const isSelected = lang === pill.code;
+                const row =
+                  pill.code === "am"
+                    ? null
+                    : narrationList.find((n) => n.lang === pill.code) || null;
+
+                // No row at all: the translation does not exist. Say so.
+                // Never play another language while showing this one selected.
+                const missing = pill.code !== "am" && !row;
+                const textOnly = !!row && !row.audio_url;
+
+                return (
+                  <button
+                    key={pill.code}
+                    type="button"
+                    onClick={() => !missing && selectLang(pill.code)}
+                    disabled={missing}
+                    aria-pressed={isSelected}
+                    className={`flex-1 rounded-xl border px-2 py-2 text-center transition-all ${
+                      isSelected
+                        ? "bg-indigo-500/15 border-indigo-500/40 text-white"
+                        : missing
+                        ? "bg-slate-950/40 border-slate-800/60 text-slate-600 cursor-not-allowed"
+                        : "bg-slate-950/60 border-slate-800 text-slate-300 hover:border-slate-700"
+                    }`}
+                  >
+                    <div className="text-xs font-bold leading-tight">{pill.label}</div>
+                    <div className="text-[8px] uppercase tracking-wider font-semibold text-slate-500 mt-0.5">
+                      {missing ? (preparing ? "Preparing" : "Not available") : textOnly ? "Text" : pill.sub}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {lang === "am" ? (
+              <p className="text-[11px] text-slate-500 px-1">
+                {story.founder_name}&apos;s original recording, in his own voice.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {/* Narration honesty badge — deliberately separate from the AI
+                    pipeline badge above so the two signals are not confused. */}
+                <div className="flex flex-wrap gap-2">
+                  {deviceVoice ? (
+                    <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                      <WifiOff className="w-3 h-3" /> Device voice — network unavailable
+                    </span>
+                  ) : activeNarration?.audio_url ? (
+                    <span className="inline-flex items-center gap-1 bg-slate-800/60 border border-slate-700 text-slate-300 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                      <Volume2 className="w-3 h-3" /> Synthetic narrator
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 bg-slate-800/60 border border-slate-700 text-slate-300 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                      <FileText className="w-3 h-3" /> Text only
+                    </span>
+                  )}
+
+                  {activeNarration?.source === "fallback" && (
+                    <span className="inline-flex items-center gap-1 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-widest px-2.5 py-0.5 rounded-full">
+                      Demo translation
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-[11px] text-slate-400 leading-relaxed bg-slate-950/50 border border-slate-800 rounded-xl px-3 py-2.5">
+                  {disclosureFor(lang, story.founder_name)}
+                </p>
+
+                {/* Text-only track: offer the device voice explicitly. */}
+                {activeNarration && !activeNarration.audio_url && mounted && speechSupported() && (
+                  <button
+                    type="button"
+                    onClick={() => startDeviceVoice(activeNarration)}
+                    className="w-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-300 font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <Volume2 className="w-4 h-4 text-indigo-400" />
+                    {lang === "de" ? "Auf diesem Gerät vorlesen" : "Read aloud on this device"}
+                  </button>
+                )}
+
+                {/* While the device voice speaks, show the full text statically. */}
+                {deviceVoice && activeNarration && (
+                  <p className="text-xs text-slate-300 leading-relaxed bg-slate-950/60 border border-slate-800 rounded-xl px-3 py-2.5">
+                    {activeNarration.text}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {preparing && narrationList.length === 0 && (
+              <p className="text-[11px] text-slate-500 px-1 flex items-center gap-1.5">
+                <Loader2 className="w-3 h-3 animate-spin" /> Preparing translated narration…
+              </p>
+            )}
+          </div>
+        )}
+
         {anyoneRestricted && (
           <div className="mx-6 bg-amber-500/10 border border-amber-500/20 rounded-2xl px-4 py-3 flex gap-2.5 items-start">
             <Shield className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
@@ -218,7 +588,7 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
             {story.founder_name}&apos;s story
           </div>
           <div className="bg-slate-950/30 border-l-2 border-indigo-500/40 pl-4 py-1 italic text-slate-300 text-sm leading-relaxed">
-            &ldquo;{story.generated_story}&rdquo;
+            &ldquo;{lang === "am" || !activeNarration ? story.generated_story : activeNarration.text}&rdquo;
           </div>
         </div>
 
@@ -270,8 +640,8 @@ export default function StoryClientView({ story, certificate, consents }: StoryC
             </div>
           </div>
           <p className="text-[10px] text-emerald-400/60 leading-relaxed">
-            No name, face, or voice is recorded on the chain. Those live only in the story above,
-            and can be deleted without touching this.
+            No name, face, or voice is recorded on the chain — and neither is the translated
+            narration. Those live only in the story above, and can be deleted without touching this.
           </p>
         </div>
 

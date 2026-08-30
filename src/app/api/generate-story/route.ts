@@ -23,6 +23,8 @@ export async function POST(req: NextRequest) {
     const founderName = (formData.get("founderName") as string) || "Dawit Alemu";
     const consentDawit = formData.get("consentDawit") === "true";
     const consentSelam = formData.get("consentSelam") === "true";
+    // Default true when the field is absent so older clients keep working.
+    const consentNarration = formData.get("consentNarration") !== "false";
 
     // --- Validation ---
     // The voice is required: everything downstream is built from it.
@@ -151,6 +153,8 @@ export async function POST(req: NextRequest) {
         public_page: consentDawit,
         social_media: consentDawit,
         sharing: consentDawit,
+        // Re-voicing his words in another language is his call alone.
+        translated_narration: consentNarration,
       },
       revoked: false,
     });
@@ -163,6 +167,9 @@ export async function POST(req: NextRequest) {
         public_page: consentSelam,
         social_media: consentSelam,
         sharing: consentSelam,
+        // Selam's consent covers her appearance in the media. Translated
+        // narration is about the founder's words, so it is not her purpose.
+        translated_narration: false,
       },
       revoked: false,
     });
@@ -174,6 +181,7 @@ export async function POST(req: NextRequest) {
       storyId: savedStory.id,
       certificateId: cert.id,
       aiSource,
+      narrationConsented: consentNarration,
     });
   } catch (error) {
     console.error("Critical error in story generation pipeline:", error);

@@ -90,3 +90,41 @@ create policy "Public Access"
 create policy "Backend Uploads"
   on storage.objects for insert
   with check ( bucket_id = 'media' );
+
+
+-- 5. Create Narrations Table (Off-Chain Translated Narration)
+-- Derived, deletable data. One row per (story, language). A missing row is the
+-- canonical representation of a missing translation. 'am' is never stored here:
+-- Amharic is the founder's real recording on stories.voice_url.
+create table if not exists public.narrations (
+  id uuid primary key,
+  story_id uuid references public.stories(id) on delete cascade,
+  lang text not null check (lang in ('en', 'de')),
+  text text not null,
+  audio_url text,
+  captions jsonb not null default '[]'::jsonb,
+  duration numeric,
+  voice_id text,
+  source text not null default 'fallback',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create unique index if not exists narrations_story_lang_idx
+  on public.narrations (story_id, lang);
+
+alter table public.narrations enable row level security;
+
+create policy "Allow public read access to narrations"
+  on public.narrations for select
+  using (true);
+
+create policy "Allow backend write to narrations"
+  on public.narrations for all
+  using (true)
+  with check (true);
+
+-- Withdrawing narration consent must DELETE the generated MP3, not hide it,
+-- so the media bucket needs a delete policy.
+create policy "Backend Deletes"
+  on storage.objects for delete
+  using ( bucket_id = 'media' );

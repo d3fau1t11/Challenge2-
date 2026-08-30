@@ -24,14 +24,28 @@ export default async function ConsentPage({ params }: PageProps) {
         id: "consent-dawit",
         story_id: storyId,
         person_name: story ? story.founder_name : "Dawit Alemu",
-        permissions: { funder_page: true, public_page: true, social_media: true, sharing: true },
+        permissions: {
+          funder_page: true,
+          public_page: true,
+          social_media: true,
+          sharing: true,
+          translated_narration: true
+        },
         revoked: false
       },
       {
         id: "consent-selam",
         story_id: storyId,
         person_name: "Selam Girma",
-        permissions: { funder_page: true, public_page: true, social_media: true, sharing: true },
+        permissions: {
+          funder_page: true,
+          public_page: true,
+          social_media: true,
+          sharing: true,
+          // Selam's consent governs her appearance in the media, not the
+          // re-voicing of the founder's words. Different purpose, different person.
+          translated_narration: false
+        },
         revoked: false
       }
     ];

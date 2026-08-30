@@ -1,4 +1,5 @@
-import { db } from "@/lib/db";
+import { db, Narration } from "@/lib/db";
+import { narrationAllowed } from "@/lib/narration";
 import StoryClientView from "./StoryClientView";
 
 interface PageProps {
@@ -11,7 +12,7 @@ export default async function StoryPage({ params }: PageProps) {
 
   // Try to find the story in the database
   let story = await db.getStory(id);
-  
+
   // If not found by story ID, try fetching by certificate ID
   if (!story) {
     story = await db.getStoryByCertificateId(id);
@@ -20,9 +21,23 @@ export default async function StoryPage({ params }: PageProps) {
   let certificate = null;
   let consents = [];
 
+  // Whether this ID resolved to a real database row. The client uses it to
+  // decide whether it may fire narration generation — otherwise /story/anything
+  // would POST jobs for a story that does not exist.
+  const isRealStory = !!story;
+
+  let narrations: Narration[] = [];
+  let allowNarration = true;
+
   if (story) {
     certificate = await db.getCertificate(story.certificate_id);
     consents = await db.getConsentForStory(story.id);
+
+    // Gate at display as well as at generation: if the founder withdrew this
+    // purpose, the server does not ship the narration text to the browser at
+    // all, and the toggle simply does not offer English or Deutsch.
+    allowNarration = narrationAllowed(consents, story.founder_name);
+    narrations = allowNarration ? await db.getNarrations(story.id) : [];
   } else {
     // Fallback Mock Story Data for demonstration safety
     story = {
@@ -66,17 +81,21 @@ export default async function StoryPage({ params }: PageProps) {
         id: "consent-dawit",
         story_id: id,
         person_name: "Dawit Alemu",
-        permissions: { funder_page: true, public_page: true, social_media: true, sharing: true },
+        permissions: { funder_page: true, public_page: true, social_media: true, sharing: true, translated_narration: true },
         revoked: false
       },
       {
         id: "consent-selam",
         story_id: id,
         person_name: "Selam Girma",
-        permissions: { funder_page: true, public_page: true, social_media: true, sharing: true },
+        permissions: { funder_page: true, public_page: true, social_media: true, sharing: true, translated_narration: false },
         revoked: false
       }
     ];
+
+    // The mock story has no narration rows and must never gain any.
+    narrations = [];
+    allowNarration = true;
   }
 
   return (
@@ -84,6 +103,9 @@ export default async function StoryPage({ params }: PageProps) {
       story={story}
       certificate={certificate!}
       consents={consents}
+      narrations={narrations}
+      narrationAllowed={allowNarration}
+      isRealStory={isRealStory}
     />
   );
 }

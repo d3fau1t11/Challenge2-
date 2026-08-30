@@ -43,8 +43,31 @@ export interface Consent {
     public_page: boolean;
     social_media: boolean;
     sharing: boolean;
+    // Re-voicing the founder's words in another language. Optional on the type
+    // so rows written before the narration migration still typecheck; read it
+    // defensively everywhere as `!== false`.
+    translated_narration?: boolean;
   };
   revoked: boolean;
+}
+
+/**
+ * Off-chain, derived, deletable. One row per (story, language).
+ * A MISSING ROW is the canonical representation of a missing translation.
+ * `lang` is never 'am' — Amharic is Dawit's real recording on stories.voice_url,
+ * not a narration.
+ */
+export interface Narration {
+  id: string;
+  story_id: string;
+  lang: "en" | "de";
+  text: string;
+  audio_url: string | null;
+  captions: Array<{ start: number; end: number; text: string }>;
+  duration: number | null;
+  voice_id: string | null;
+  source: "live" | "fallback";
+  created_at: string;
 }
 
 // Check environment variables
@@ -64,20 +87,34 @@ interface LocalSchema {
   certificates: Certificate[];
   stories: Story[];
   consents: Consent[];
+  narrations: Narration[];
+}
+
+function emptyDb(): LocalSchema {
+  return { certificates: [], stories: [], consents: [], narrations: [] };
 }
 
 function readLocalDb(): LocalSchema {
   if (!fs.existsSync(LOCAL_DB_PATH)) {
-    const defaultDb: LocalSchema = { certificates: [], stories: [], consents: [] };
+    const defaultDb = emptyDb();
     fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(defaultDb, null, 2), 'utf-8');
     return defaultDb;
   }
   try {
-    const data = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
-    return JSON.parse(data);
+    const raw = fs.readFileSync(LOCAL_DB_PATH, 'utf-8');
+    const data = JSON.parse(raw) as Partial<LocalSchema>;
+
+    // Default every collection so an older db.json on someone's laptop
+    // does not crash after this migration.
+    data.certificates ??= [];
+    data.stories ??= [];
+    data.consents ??= [];
+    data.narrations ??= [];
+
+    return data as LocalSchema;
   } catch (e) {
     console.error('Error reading local JSON DB, resetting:', e);
-    const defaultDb: LocalSchema = { certificates: [], stories: [], consents: [] };
+    const defaultDb = emptyDb();
     fs.writeFileSync(LOCAL_DB_PATH, JSON.stringify(defaultDb, null, 2), 'utf-8');
     return defaultDb;
   }
@@ -234,6 +271,24 @@ export const db = {
     }
   },
 
+  getConsentById: async (id: string): Promise<Consent | null> => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('consents')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) {
+        console.error('Error fetching consent by id from Supabase:', error);
+        return null;
+      }
+      return data;
+    } else {
+      const data = readLocalDb();
+      return data.consents.find((c) => c.id === id) || null;
+    }
+  },
+
   createConsent: async (consent: Omit<Consent, 'id'>): Promise<Consent> => {
     const id = generateUuid();
     const newConsent: Consent = { id, ...consent };
@@ -287,13 +342,108 @@ export const db = {
     }
   },
 
+  // --- NARRATIONS (off-chain, derived, deletable) ---
+  getNarrations: async (storyId: string): Promise<Narration[]> => {
+    if (isSupabaseConfigured && supabase) {
+      const { data, error } = await supabase
+        .from('narrations')
+        .select('*')
+        .eq('story_id', storyId);
+      if (error) {
+        console.error('Error fetching narrations from Supabase:', error);
+        return [];
+      }
+      return data || [];
+    } else {
+      const data = readLocalDb();
+      return data.narrations.filter((n) => n.story_id === storyId);
+    }
+  },
+
+  getNarration: async (storyId: string, lang: "en" | "de"): Promise<Narration | null> => {
+    const rows = await db.getNarrations(storyId);
+    return rows.find((n) => n.lang === lang) || null;
+  },
+
+  upsertNarration: async (row: Omit<Narration, 'id' | 'created_at'>): Promise<Narration> => {
+    if (isSupabaseConfigured && supabase) {
+      const existing = await db.getNarration(row.story_id, row.lang);
+      const payload: Narration = {
+        id: existing?.id || generateUuid(),
+        created_at: existing?.created_at || new Date().toISOString(),
+        ...row,
+      };
+
+      const { data, error } = await supabase
+        .from('narrations')
+        .upsert(payload, { onConflict: 'story_id,lang' })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error upserting narration to Supabase:', error);
+        throw error;
+      }
+      return data;
+    } else {
+      // No real upsert on the JSON path: delete then insert.
+      const data = readLocalDb();
+      const existing = data.narrations.find(
+        (n) => n.story_id === row.story_id && n.lang === row.lang
+      );
+      data.narrations = data.narrations.filter(
+        (n) => !(n.story_id === row.story_id && n.lang === row.lang)
+      );
+      const payload: Narration = {
+        id: existing?.id || generateUuid(),
+        created_at: existing?.created_at || new Date().toISOString(),
+        ...row,
+      };
+      data.narrations.push(payload);
+      writeLocalDb(data);
+      return payload;
+    }
+  },
+
+  /**
+   * Deletes the narration rows AND the generated MP3 objects.
+   * This is real deletion, not gating — the synthetic audio is derived data
+   * with no evidentiary value, so nothing is lost by destroying it.
+   */
+  deleteNarrations: async (storyId: string): Promise<number> => {
+    const rows = await db.getNarrations(storyId);
+
+    // Files first, so a row is never left pointing at a deleted object.
+    // A failed file delete must not block the row delete.
+    for (const row of rows) {
+      if (row.audio_url) {
+        await db.deleteMediaByUrl(row.audio_url);
+      }
+    }
+
+    if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.from('narrations').delete().eq('story_id', storyId);
+      if (error) {
+        console.error('Error deleting narrations from Supabase:', error);
+        return 0;
+      }
+    } else {
+      const data = readLocalDb();
+      data.narrations = data.narrations.filter((n) => n.story_id !== storyId);
+      writeLocalDb(data);
+    }
+
+    console.log(`Deleted ${rows.length} narration row(s) and their audio for story ${storyId}`);
+    return rows.length;
+  },
+
   // --- MEDIA STORAGE ---
   uploadMedia: async (fileName: string, fileBuffer: Buffer, mimeType: string): Promise<string> => {
     const safeFileName = `${Date.now()}-${fileName.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
     if (isSupabaseConfigured && supabase) {
       // Bucket name must be "media" and be pre-created/public
-      const { data, error } = await supabase.storage
+      const { error } = await supabase.storage
         .from('media')
         .upload(safeFileName, fileBuffer, {
           contentType: mimeType,
@@ -318,9 +468,38 @@ export const db = {
       }
       const filePath = path.join(LOCAL_UPLOAD_DIR, safeFileName);
       fs.writeFileSync(filePath, fileBuffer);
-      
+
       // Return relative web URL
       return `/uploads/${safeFileName}`;
+    }
+  },
+
+  /**
+   * Removes a stored object given its public URL. The object key is the last
+   * path segment. Never throws: a failed file delete must not block the consent
+   * update that triggered it — the consent write is the more important one.
+   */
+  deleteMediaByUrl: async (url: string): Promise<boolean> => {
+    try {
+      const key = decodeURIComponent(url.split('?')[0].split('/').filter(Boolean).pop() || '');
+      if (!key) return false;
+
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.storage.from('media').remove([key]);
+        if (error) {
+          console.error('Error removing object from Supabase Storage:', error);
+          return false;
+        }
+      } else {
+        const filePath = path.join(LOCAL_UPLOAD_DIR, key);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+
+      console.log(`Deleted media object: ${key}`);
+      return true;
+    } catch (e) {
+      console.error('deleteMediaByUrl failed (continuing anyway):', e);
+      return false;
     }
   },
 };

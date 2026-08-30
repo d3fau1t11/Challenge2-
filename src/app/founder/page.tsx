@@ -24,12 +24,15 @@ export default function FounderPage() {
   // Consent state
   const [consentDawit, setConsentDawit] = useState(true);
   const [consentSelam, setConsentSelam] = useState(true);
+  // Default checked, but a real control: he can turn it off before submitting.
+  const [consentNarration, setConsentNarration] = useState(true);
 
   // Submission state
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isExtracting, setIsExtracting] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [narrationStatus, setNarrationStatus] = useState<string | null>(null);
 
   const steps = [
     "Uploading media to secure off-chain storage...",
@@ -145,6 +148,7 @@ export default function FounderPage() {
       formData.append("language", language);
       formData.append("consentDawit", String(consentDawit));
       formData.append("consentSelam", String(consentSelam));
+      formData.append("consentNarration", String(consentNarration));
 
       const res = await fetch("/api/generate-story", { method: "POST", body: formData });
       clearInterval(progressInterval);
@@ -156,6 +160,41 @@ export default function FounderPage() {
 
       const data = await res.json();
       setCurrentStep(steps.length);
+
+      // Pre-generate the translated narration BEFORE Anna ever scans, so the
+      // MP3 is already a static file on the CDN by the time she does. This is
+      // deliberately not inside /api/generate-story: two more API calls there
+      // would push that route past the function timeout.
+      //
+      // It never blocks him. We wait a few seconds if it is quick, then
+      // navigate regardless — the story page has a lazy catch-up for the rest.
+      if (consentNarration && data.storyId) {
+        setNarrationStatus("Preparing translated narration…");
+
+        const jobs = Promise.allSettled(
+          (["en", "de"] as const).map((lang) =>
+            fetch("/api/narration", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ storyId: data.storyId, lang }),
+            })
+          )
+        ).then((results) => {
+          const ok = results.filter(
+            (r) => r.status === "fulfilled" && r.value.ok
+          ).length;
+          setNarrationStatus(
+            ok === 2
+              ? "English and German ready."
+              : ok === 1
+              ? "One translated narration ready; the other will finish on the story page."
+              : "Translated narration not ready yet — the story still works."
+          );
+        });
+
+        await Promise.race([jobs, new Promise((r) => setTimeout(r, 5000))]);
+      }
+
       setTimeout(() => router.push(`/story/${data.storyId}`), 1000);
     } catch (err) {
       clearInterval(progressInterval);
@@ -205,6 +244,12 @@ export default function FounderPage() {
               );
             })}
           </div>
+
+          {narrationStatus && (
+            <p className="text-[11px] text-slate-500 pt-2 text-left leading-relaxed">
+              {narrationStatus}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -412,6 +457,20 @@ export default function FounderPage() {
                 <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors leading-relaxed">
                   Employee <strong>Selam Girma</strong> consents to appearing in the uploaded media.
                   She can revoke this at any time.
+                </span>
+              </label>
+
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={consentNarration}
+                  onChange={(e) => setConsentNarration(e.target.checked)}
+                  className="mt-1 rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 focus:ring-offset-0"
+                />
+                <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors leading-relaxed">
+                  Allow an <strong>English and German narration</strong> of my words, read by a
+                  synthetic voice. My own recording always stays the main one, and turning this
+                  off later deletes the generated audio.
                 </span>
               </label>
             </div>

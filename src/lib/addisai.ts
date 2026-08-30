@@ -110,6 +110,101 @@ export const addisai = {
   },
 
   /**
+   * Translate to an arbitrary target language (used by the narration pipeline).
+   * Unlike translate() above there is no canned fallback here — the caller owns
+   * the fallback chain and needs to know honestly whether this tier worked.
+   * Returns { text: "", live: false } on any failure.
+   */
+  translateTo: async (
+    text: string,
+    sourceLanguage: string,
+    targetLanguage: string
+  ): Promise<AiResult> => {
+    const apiKey = process.env.ADDIS_AI_API_KEY;
+    if (!apiKey) {
+      console.warn("ADDIS_AI_API_KEY is not set. Skipping translateTo tier.");
+      return { text: "", live: false };
+    }
+
+    try {
+      console.log(`Calling Addis AI Translate (${sourceLanguage} → ${targetLanguage})...`);
+      const res = await fetch(`${ADDIS_AI_BASE}/api/v1/translate`, {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text,
+          source_language: sourceLanguage,
+          target_language: targetLanguage,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Addis AI Translate failed with status ${res.status}: ${await res.text()}`);
+      }
+
+      const json = await res.json();
+      const translation =
+        (json.data && (json.data.translation || json.data.response_text)) ||
+        json.translation ||
+        json.response_text ||
+        "";
+
+      if (!translation) throw new Error("Empty translation response");
+      return { text: translation, live: true };
+    } catch (error) {
+      console.error(`Addis AI translateTo(${targetLanguage}) failed:`, error);
+      return { text: "", live: false };
+    }
+  },
+
+  /**
+   * Tier-2 fallback for a target language the translate endpoint does not
+   * support: ask the chat model to translate, with a hard instruction not to
+   * add facts. Returns { text: "", live: false } on failure.
+   */
+  translateViaChat: async (text: string, targetLanguageName: string): Promise<AiResult> => {
+    const apiKey = process.env.ADDIS_AI_API_KEY;
+    if (!apiKey) {
+      console.warn("ADDIS_AI_API_KEY is not set. Skipping translateViaChat tier.");
+      return { text: "", live: false };
+    }
+
+    try {
+      const prompt = `Translate the following text into ${targetLanguageName}.
+Preserve the first-person voice and the respectful tone.
+Do not add, remove, or invent any facts. Do not add commentary.
+Return only the translated text.
+
+Text: "${text}"
+
+Translation:`;
+
+      console.log(`Calling Addis AI chat_generate for ${targetLanguageName} translation...`);
+      const res = await fetch(`${ADDIS_AI_BASE}/api/v1/chat_generate`, {
+        method: "POST",
+        headers: { "x-api-key": apiKey, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.3,
+          max_tokens: 500,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`chat_generate failed with status ${res.status}`);
+
+      const json = await res.json();
+      const out =
+        (json.data && json.data.response_text) || json.response_text || json.text || "";
+
+      if (!out) throw new Error("Empty chat translation response");
+      return { text: out.trim(), live: true };
+    } catch (error) {
+      console.error(`Addis AI translateViaChat(${targetLanguageName}) failed:`, error);
+      return { text: "", live: false };
+    }
+  },
+
+  /**
    * Turn the raw transcript into a short, respectful donor-facing story
    */
   generateStory: async (englishTranscript: string, milestone: string): Promise<AiResult> => {
@@ -211,7 +306,8 @@ JSON array:`;
   },
 };
 
-function splitTextToCaptions(
+// Exported so the narration pipeline can reuse it rather than duplicating it.
+export function splitTextToCaptions(
   text: string,
   duration: number
 ): Array<{ start: number; end: number; text: string }> {
