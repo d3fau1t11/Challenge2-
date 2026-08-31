@@ -85,12 +85,15 @@ export default function PublicStoriesPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const filteredStories = stories.filter(
-    (s) =>
-      s.founder_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.generated_story?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.certificate_id.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredStories = stories
+    .filter((s) => s.visibility !== "private" && s.status !== "REVOKED")
+    .filter(
+      (s) =>
+        s.founder_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.generated_story?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.certificate_id.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
 
   return (
     <div className="min-h-screen bg-slate-950 text-white py-12 px-4 sm:px-6 relative overflow-hidden">
