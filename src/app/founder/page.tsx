@@ -12,7 +12,7 @@ export default function FounderPage() {
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const [founderName, setFounderName] = useState("Dawit Alemu");
+  const [founderName, setFounderName] = useState("");
   const [milestone, setMilestone] = useState("9 employees");
   const [language, setLanguage] = useState("am");
 
@@ -368,23 +368,6 @@ export default function FounderPage() {
               />
             </svg>
             Sign in with Google
-          </button>
-
-          <button
-            onClick={() =>
-              setUser({
-                id: "demo-dawit-id",
-                email: "dawit.alemu@workshop.et",
-                user_metadata: { full_name: "Dawit Alemu" },
-                app_metadata: {},
-                aud: "authenticated",
-                created_at: new Date().toISOString(),
-              } as User)
-            }
-            type="button"
-            className="w-full bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-semibold py-3.5 px-6 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all"
-          >
-            <Shield className="w-4 h-4" /> Continue as Dawit Alemu (Demo Founder)
           </button>
         </div>
       </div>

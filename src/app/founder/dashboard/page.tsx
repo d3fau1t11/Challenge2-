@@ -62,16 +62,28 @@ export default function FounderDashboardPage() {
   const loadFounderStories = async (currentUser: User) => {
     setLoadingStories(true);
     try {
-      const { data, error } = await supabaseClient
-        .from("stories")
-        .select("*")
-        .order("created_at", { ascending: false });
+      const userFullName = currentUser.user_metadata?.full_name;
+
+      let query = supabaseClient.from("stories").select("*");
+
+      if (currentUser.id && userFullName) {
+        query = query.or(`founder_id.eq.${currentUser.id},founder_name.eq.${userFullName}`);
+      } else if (currentUser.id) {
+        query = query.eq("founder_id", currentUser.id);
+      } else if (userFullName) {
+        query = query.eq("founder_name", userFullName);
+      }
+
+      const { data, error } = await query.order("created_at", { ascending: false });
 
       if (!error && data) {
         setStories(data);
+      } else {
+        setStories([]);
       }
     } catch (err) {
       console.error("Error loading founder stories:", err);
+      setStories([]);
     } finally {
       setLoadingStories(false);
     }
@@ -119,19 +131,6 @@ export default function FounderDashboardPage() {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleDemoSignIn = () => {
-    const demoUser = {
-      id: "demo-dawit-id",
-      email: "dawit.alemu@workshop.et",
-      user_metadata: { full_name: "Dawit Alemu" },
-      app_metadata: {},
-      aud: "authenticated",
-      created_at: new Date().toISOString(),
-    } as User;
-    setUser(demoUser);
-    loadFounderStories(demoUser);
-  };
-
   if (authLoading) {
     return (
       <div className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
@@ -154,7 +153,6 @@ export default function FounderDashboardPage() {
             Access TrueImpact story storage to view generated QR codes, manage visibility, and review published impact stories.
           </p>
 
-
           <div className="space-y-3">
             <Link
               href="/founder"
@@ -162,14 +160,6 @@ export default function FounderDashboardPage() {
             >
               Sign In with Google
             </Link>
-
-            <button
-              onClick={handleDemoSignIn}
-              type="button"
-              className="w-full bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 font-semibold py-3.5 px-6 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all"
-            >
-              <Shield className="w-4 h-4" /> Continue as Dawit Alemu (Demo Publisher)
-            </button>
           </div>
         </div>
       </div>

@@ -242,33 +242,6 @@ export default function ScanPage() {
           </div>
         </form>
 
-        {/* Quick Demo Shortcuts */}
-        <div className="pt-2 border-t border-slate-800/60 text-left space-y-2">
-          <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">
-            Demo QR Shortcuts
-          </div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => handleProcessScannedText("demo-story-id")}
-              className="p-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl text-left transition-colors group"
-            >
-              <div className="text-xs font-bold text-indigo-400 group-hover:text-indigo-300 flex items-center justify-between">
-                Dawit&apos;s Story <ExternalLink className="w-3 h-3" />
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Garment Workshop &bull; Addis Ababa</div>
-            </button>
-
-            <Link
-              href="/certificate/demo-cert"
-              className="p-2.5 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-xl text-left transition-colors group"
-            >
-              <div className="text-xs font-bold text-emerald-400 group-hover:text-emerald-300 flex items-center justify-between">
-                Demo Cert <ExternalLink className="w-3 h-3" />
-              </div>
-              <div className="text-[10px] text-slate-500 mt-0.5">Verified SDG 8 Certificate</div>
-            </Link>
-          </div>
-        </div>
       </div>
     </div>
   );

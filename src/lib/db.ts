@@ -311,7 +311,7 @@ export const db = {
         .order('created_at', { ascending: false });
       if (error) {
         console.error('Error fetching founder stories from Supabase:', error);
-        return db.getAllStories();
+        return [];
       }
       return data || [];
     } else {

@@ -19,33 +19,6 @@ import {
 import { supabaseClient } from "@/lib/supabaseClient";
 import type { Story } from "@/lib/db";
 
-// Fallback demo story if database is fresh
-const DEMO_STORIES: Story[] = [
-  {
-    id: "demo-story-id",
-    certificate_id: "demo-cert",
-    founder_name: "Dawit Alemu",
-    voice_url: "/uploads/demo-voice.wav",
-    video_url: "",
-    media: [
-      { url: "https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?q=80&w=800", type: "image" },
-      { url: "https://images.unsplash.com/photo-1581092335397-9583fe92d232?q=80&w=800", type: "image" },
-    ],
-    visibility: "public",
-    status: "PUBLISHED",
-    ai_source: "live",
-    amharic_transcript:
-      "ትልቅ ህልም ይታይሃል ገና ዛሬ ስትጀምር አንድ ሚሊየን ፎሎወር ይታይሃል ገና አሁን ስትጀምር አንድ ሚሊየን በወር ስታገኝ ይታይሃል...",
-    english_translation:
-      "You see a big dream even as you start today. You see a million followers right at the beginning. You see making a million a month...",
-    generated_story:
-      "Dawit Alemu started his garment and leather workshop in Addis Ababa with a vision to create dignified jobs...",
-    captions: [],
-    scenes: [],
-    created_at: new Date().toISOString(),
-  },
-];
-
 export default function PublicStoriesPage() {
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,14 +38,14 @@ export default function PublicStoriesPage() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setStories(data);
       } else {
-        setStories(DEMO_STORIES);
+        setStories([]);
       }
     } catch (err) {
       console.error("Error fetching public stories:", err);
-      setStories(DEMO_STORIES);
+      setStories([]);
     } finally {
       setLoading(false);
     }
