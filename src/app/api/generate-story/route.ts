@@ -26,7 +26,9 @@ export async function POST(req: NextRequest) {
     const founderId = (formData.get("founderId") as string) || "";
     const visibility = ((formData.get("visibility") as string) || "donor_only") as "public" | "donor_only" | "private";
     const donorName = (formData.get("donorName") as string) || "";
-    const donorEmail = (formData.get("donorEmail") as string) || "";
+    // If public or private, donor email is not needed / assigned
+    const donorEmail = visibility === "donor_only" ? ((formData.get("donorEmail") as string) || "") : "";
+    const speechLanguage = (formData.get("language") as string) || (formData.get("speechLanguage") as string) || "om";
 
     const consentDawit = formData.get("consentDawit") === "true";
     const consentSelam = formData.get("consentSelam") === "true";
@@ -96,20 +98,20 @@ export async function POST(req: NextRequest) {
 
     // --- AI pipeline ---
     // Each call reports whether it ran live so the UI can be honest about it.
-    const transcription = await addisai.transcribe(voiceBuffer, voiceFile.type || "audio/wav");
-    console.log("Transcript completed.");
+    const transcription = await addisai.transcribe(voiceBuffer, voiceFile.type || "audio/wav", speechLanguage);
+    console.log(`Transcript completed (${speechLanguage}).`);
 
-    const translation = await addisai.translate(transcription.text);
+    const translation = await addisai.translate(transcription.text, speechLanguage);
     console.log("Translation completed.");
 
-    const story = await addisai.generateStory(translation.text, milestone);
-    console.log("Story generation completed.");
+    // The translated speech IS the story. Direct verbatim translation, no text modifications.
+    const storyText = translation.text;
 
     const captions = await addisai.generateCaptions(translation.text, duration);
     console.log("Captions generated.");
 
     const aiSource: "live" | "fallback" =
-      transcription.live && translation.live && story.live ? "live" : "fallback";
+      transcription.live && translation.live ? "live" : "fallback";
 
 
     // --- Layer 1: anonymous on-chain certificate ---
@@ -150,7 +152,7 @@ export async function POST(req: NextRequest) {
       ai_source: aiSource,
       amharic_transcript: transcription.text,
       english_translation: translation.text,
-      generated_story: story.text,
+      generated_story: storyText,
       captions,
       scenes: [],
     });

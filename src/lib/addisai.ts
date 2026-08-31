@@ -25,7 +25,7 @@ export async function translateWithChatGPT(text: string, targetLanguage: string 
   }
   try {
     console.log(`Calling ChatGPT API (RapidAPI) for translation to ${targetLanguage}...`);
-    const prompt = `Translate the following text into ${targetLanguage}. Return ONLY the translation, no commentary or intro.\n\nText: "${text}"`;
+    const prompt = `Translate the following text into ${targetLanguage} as accurately and directly as possible. Preserve the speaker's exact meaning, words, and tone. Do NOT rewrite, summarize, add, or omit any content. Return ONLY the translation, with no intro or commentary.\n\nText: "${text}"`;
     const res = await fetch("https://chatgpt-42.p.rapidapi.com/conversationgpt4-2", {
       method: "POST",
       headers: {
@@ -268,7 +268,7 @@ Translation:`;
   /**
    * Turn the raw transcript into a short, respectful donor-facing story
    */
-  generateStory: async (englishTranscript: string, milestone: string): Promise<AiResult> => {
+  generateStory: async (englishTranscript: string): Promise<AiResult> => {
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
       console.warn("ADDIS_AI_API_KEY is not set. Using fallback story.");
@@ -277,13 +277,12 @@ Translation:`;
 
     try {
       const prompt = `You are a respectful, empathetic impact storytelling copywriter.
-Below is a translated transcript from a workshop founder in Ethiopia, and the verified milestone they reached.
-Rewrite this into a concise, respectful, emotional story of about 3-4 sentences suitable for a donor-facing page.
+Below is a translated transcript of what a workshop founder in Ethiopia said in their audio recording.
+Format and polish this speech into a concise, respectful, emotional story of about 3-4 sentences suitable for a donor-facing page.
 Use the first-person perspective of the founder. Focus on human connection, Decent Work (SDG 8), and gratitude.
-Write strictly in English. Do not invent facts that are not in the transcript or the milestone.
+Write strictly in English based ONLY on the founder's speech below. Do NOT introduce, invent, or assume any outside facts, numbers, or milestones that are not present in the speech.
 
-Founder transcript: "${englishTranscript}"
-Verified milestone: "${milestone}"
+Founder speech transcript: "${englishTranscript}"
 
 Polished story:`;
 

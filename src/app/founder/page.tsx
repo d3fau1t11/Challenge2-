@@ -202,7 +202,11 @@ export default function FounderPage() {
       formData.append("language", language);
       formData.append("visibility", visibility);
       formData.append("donorName", donorName);
-      formData.append("donorEmail", donorEmail);
+      if (visibility === "donor_only") {
+        formData.append("donorEmail", donorEmail);
+      } else {
+        formData.append("donorEmail", "");
+      }
       formData.append("consentDawit", String(consentDawit));
       formData.append("consentSelam", String(consentSelam));
       formData.append("consentNarration", String(consentNarration));

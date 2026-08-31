@@ -9,8 +9,8 @@
 // Verify these against your own account before the demo:
 //   curl -s -H "xi-api-key: $ELEVENLABS_API_KEY" https://api.elevenlabs.io/v1/voices \
 //     | python3 -c "import json,sys; [print(v['voice_id'], v['name']) for v in json.load(sys.stdin)['voices']]"
-export const VOICE_EN = process.env.ELEVENLABS_VOICE_EN || "21m00Tcm4TlvDq8ikWAM"; // Rachel (stock)
-export const VOICE_DE = process.env.ELEVENLABS_VOICE_DE || "AZnzlk1XvdvUeBnXmlld"; // Domi (stock)
+export const VOICE_EN = process.env.ELEVENLABS_VOICE_EN || "JBFqnCBsd6RMkjVDRZzb"; // George (stock)
+export const VOICE_DE = process.env.ELEVENLABS_VOICE_DE || "EXAVITQu4vr4xnSDxMaL"; // Sarah (stock)
 
 const ELEVEN_BASE = "https://api.elevenlabs.io";
 
