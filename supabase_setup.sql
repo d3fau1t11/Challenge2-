@@ -32,6 +32,7 @@ create table if not exists public.stories (
   certificate_id uuid references public.certificates(id) on delete cascade,
   founder_id text,
   founder_name text not null,
+  founder_email text,
   voice_url text not null,
   video_url text not null,
   media jsonb not null default '[]'::jsonb,

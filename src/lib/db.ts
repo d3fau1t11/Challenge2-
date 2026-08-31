@@ -39,6 +39,7 @@ export interface Story {
   certificate_id: string;
   founder_id?: string;
   founder_name: string;
+  founder_email?: string;
   voice_url: string;
   video_url: string;
   media: MediaItem[];
@@ -358,6 +359,26 @@ export const db = {
       return true;
     }
     return false;
+  },
+
+  deleteStory: async (id: string): Promise<boolean> => {
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from("consents").delete().eq("story_id", id);
+      await supabase.from("narrations").delete().eq("story_id", id);
+      const { error } = await supabase.from("stories").delete().eq("id", id);
+      if (error) {
+        console.error("Error deleting story on Supabase:", error);
+        return false;
+      }
+      return true;
+    } else {
+      const data = readLocalDb();
+      data.stories = data.stories.filter((s) => s.id !== id);
+      data.consents = data.consents.filter((c) => c.story_id !== id);
+      data.narrations = data.narrations.filter((n) => n.story_id !== id);
+      writeLocalDb(data);
+      return true;
+    }
   },
 
 

@@ -12,10 +12,7 @@ export default function Home() {
       {/* Main Content Wrapper */}
       <main className="max-w-4xl w-full text-center space-y-10 relative z-10">
         
-        {/* Badge */}
-        <div className="inline-flex items-center gap-2 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-xs px-4 py-1.5 rounded-full font-bold uppercase tracking-widest">
-          <ShieldCheck className="w-4 h-4" /> TrueImpact Platform
-        </div>
+
 
 
         {/* Title */}
@@ -28,38 +25,7 @@ export default function Home() {
           </p>
         </div>
 
-        {/* Double Layer Details Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-left pt-6">
-          
-          {/* Layer 1 */}
-          <div className="bg-slate-900/40 backdrop-blur-md border border-emerald-500/10 p-6 rounded-3xl space-y-3 relative group hover:border-emerald-500/20 transition-all">
-            <div className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-center justify-center text-emerald-400">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-            <h3 className="text-base font-bold text-emerald-400">Layer 1 — On-Chain Certificate</h3>
-            <p className="text-slate-400 text-xs leading-relaxed">
-              Provides immutable, anonymized proof of milestones (SDG criteria, region, timestamp, amount). Never contains private records, voices, or faces.
-            </p>
-            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest pt-2">
-              Immutable & Public
-            </div>
-          </div>
 
-          {/* Layer 2 */}
-          <div className="bg-slate-900/40 backdrop-blur-md border border-indigo-500/10 p-6 rounded-3xl space-y-3 relative group hover:border-indigo-500/20 transition-all">
-            <div className="w-10 h-10 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400">
-              <HeartHandshake className="w-5 h-5" />
-            </div>
-            <h3 className="text-base font-bold text-indigo-400">Layer 2 — Off-Chain Story</h3>
-            <p className="text-slate-400 text-xs leading-relaxed">
-              Rich, human-interest narratives, original founder voice notes, and videos. Owned off-chain with granular, revocable consent controls.
-            </p>
-            <div className="text-[10px] font-mono text-slate-500 uppercase tracking-widest pt-2">
-              Revocable & Private
-            </div>
-          </div>
-
-        </div>
 
         {/* Action Portals */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-8">

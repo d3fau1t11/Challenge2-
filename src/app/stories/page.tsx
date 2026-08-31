@@ -19,7 +19,10 @@ import {
 import { supabaseClient } from "@/lib/supabaseClient";
 import type { Story } from "@/lib/db";
 
+import { useNotification } from "@/context/NotificationContext";
+
 export default function PublicStoriesPage() {
+  const { notify } = useNotification();
   const [stories, setStories] = useState<Story[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeQrStory, setActiveQrStory] = useState<Story | null>(null);
@@ -55,6 +58,7 @@ export default function PublicStoriesPage() {
     const url = `${window.location.origin}/story/${storyId}`;
     navigator.clipboard.writeText(url);
     setCopiedId(storyId);
+    notify("Story link copied to clipboard!", "success");
     setTimeout(() => setCopiedId(null), 2000);
   };
 

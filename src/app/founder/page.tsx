@@ -6,6 +6,7 @@ import { Video, BarChart2, Shield, ArrowRight, CheckCircle2, Loader2, Upload, Im
 import { extractAudioFromVideo, getMediaDuration } from "@/lib/extractAudio";
 import { supabaseClient } from "@/lib/supabaseClient";
 import type { User } from "@supabase/supabase-js";
+import { getURL } from "@/lib/getURL";
 
 export default function FounderPage() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export default function FounderPage() {
   const [authLoading, setAuthLoading] = useState(true);
 
   const [founderName, setFounderName] = useState("");
+  const [founderEmail, setFounderEmail] = useState("");
   const [milestone, setMilestone] = useState("9 employees");
   const [language, setLanguage] = useState("am");
 
@@ -33,7 +35,7 @@ export default function FounderPage() {
 
   // Consent state
   const [consentDawit, setConsentDawit] = useState(true);
-  const [consentSelam, setConsentSelam] = useState(true);
+  const [consentEmployee, setConsentEmployee] = useState(true);
   // Default checked, but a real control: he can turn it off before submitting.
   const [consentNarration, setConsentNarration] = useState(true);
 
@@ -51,6 +53,9 @@ export default function FounderPage() {
       if (currentUser?.user_metadata?.full_name) {
         setFounderName(currentUser.user_metadata.full_name);
       }
+      if (currentUser?.email) {
+        setFounderEmail(currentUser.email);
+      }
       setAuthLoading(false);
     });
 
@@ -61,6 +66,9 @@ export default function FounderPage() {
       setUser(currentUser);
       if (currentUser?.user_metadata?.full_name) {
         setFounderName(currentUser.user_metadata.full_name);
+      }
+      if (currentUser?.email) {
+        setFounderEmail(currentUser.email);
       }
       setAuthLoading(false);
     });
@@ -73,7 +81,7 @@ export default function FounderPage() {
     const { error } = await supabaseClient.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: typeof window !== "undefined" ? window.location.href : undefined,
+        redirectTo: getURL("/founder"),
       },
     });
     if (error) {
@@ -198,6 +206,7 @@ export default function FounderPage() {
       formData.append("duration", String(duration));
       formData.append("milestone", milestone);
       formData.append("founderName", founderName);
+      formData.append("founderEmail", founderEmail);
       if (user?.id) formData.append("founderId", user.id);
       formData.append("language", language);
       formData.append("visibility", visibility);
@@ -208,7 +217,7 @@ export default function FounderPage() {
         formData.append("donorEmail", "");
       }
       formData.append("consentDawit", String(consentDawit));
-      formData.append("consentSelam", String(consentSelam));
+      formData.append("consentEmployee", String(consentEmployee));
       formData.append("consentNarration", String(consentNarration));
 
       const res = await fetch("/api/generate-story", { method: "POST", body: formData });
@@ -459,6 +468,21 @@ export default function FounderPage() {
                 <option value="en">English</option>
               </select>
             </div>
+            <div className="space-y-2 sm:col-span-2">
+              <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider block">
+                Founder Contact Email (for Interested Donors)
+              </label>
+              <input
+                type="email"
+                value={founderEmail}
+                onChange={(e) => setFounderEmail(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors"
+                placeholder="e.g. founder@workshop.et"
+              />
+              <span className="text-[10px] text-slate-500 block">
+                Allows new and existing donors to contact you directly for future donations and support.
+              </span>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -682,13 +706,12 @@ export default function FounderPage() {
               <label className="flex items-start gap-3 cursor-pointer group">
                 <input
                   type="checkbox"
-                  checked={consentSelam}
-                  onChange={(e) => setConsentSelam(e.target.checked)}
+                  checked={consentEmployee}
+                  onChange={(e) => setConsentEmployee(e.target.checked)}
                   className="mt-1 rounded border-slate-800 bg-slate-950 text-indigo-600 focus:ring-0 focus:ring-offset-0"
                 />
                 <span className="text-xs text-slate-400 group-hover:text-slate-300 transition-colors leading-relaxed">
-                  Employee <strong>Selam Girma</strong> consents to appearing in the uploaded media.
-                  She can revoke this at any time.
+                  Employee consents to appearing in the uploaded media. They can revoke this at any time.
                 </span>
               </label>
 

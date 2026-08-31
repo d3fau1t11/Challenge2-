@@ -17,6 +17,7 @@ import {
   WifiOff,
   FileText,
   Loader2,
+  Mail,
 } from "lucide-react";
 import { Certificate, Story, Consent, Narration } from "@/lib/db";
 import { speak, cancelSpeech, speechSupported, onVoicesReady } from "@/lib/speechFallback";
@@ -838,6 +839,25 @@ export default function StoryClientView({
             </div>
           </div>
         </div>
+
+        {/* Founder Contact Section for Donors */}
+        {story.founder_email && (
+          <div className="mx-6 p-5 bg-indigo-950/30 border border-indigo-500/30 rounded-2xl space-y-3 shadow-lg">
+            <div className="flex items-center gap-2 text-xs font-bold text-indigo-300">
+              <Mail className="w-4 h-4 text-indigo-400" />
+              Contact Founder for Future Support & Donations
+            </div>
+            <p className="text-slate-400 text-xs leading-relaxed">
+              Interested in supporting <span className="text-white font-semibold">{story.founder_name}</span>&apos;s workshop further or making a direct contribution? Reach out directly:
+            </p>
+            <a
+              href={`mailto:${story.founder_email}?subject=Interested%20in%20supporting%20${encodeURIComponent(story.founder_name)}'s%20workshop`}
+              className="inline-flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-md shadow-indigo-500/20 active:scale-[0.98]"
+            >
+              <Mail className="w-4 h-4" /> Send Email ({story.founder_email})
+            </a>
+          </div>
+        )}
 
         {/* Layer 1 panel — deliberately visually distinct from the story above */}
         <div className="mx-6 p-4 bg-emerald-950/20 border border-emerald-500/20 rounded-2xl space-y-3">

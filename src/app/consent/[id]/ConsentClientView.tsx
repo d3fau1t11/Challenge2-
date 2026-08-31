@@ -127,9 +127,9 @@ export default function ConsentClientView({ storyId, initialConsents }: ConsentC
             const isSaving = savingId === consent.id;
 
             // Translated narration is about re-voicing the founder's WORDS.
-            // Selam's consent governs her appearance in the media — a different
-            // purpose on a different person — so her row does not get this.
-            const isFounder = consent.person_name !== "Selam Girma";
+            // Employee consent governs their appearance in the media.
+            const isEmployee = consent.person_name === "Selam Girma" || consent.person_name === "Workshop Employee" || consent.person_name === "Employee";
+            const isFounder = !isEmployee;
 
             return (
               <div
@@ -149,7 +149,7 @@ export default function ConsentClientView({ storyId, initialConsents }: ConsentC
                     <div>
                       <div className="text-sm font-bold text-slate-200">{consent.person_name}</div>
                       <div className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">
-                        {consent.person_name === "Selam Girma" ? "Machine Operator" : "Workshop Founder"}
+                        {isEmployee ? "Workshop Employee" : "Workshop Founder"}
                       </div>
                     </div>
                   </div>

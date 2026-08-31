@@ -22,14 +22,17 @@ import {
 import type { Story } from "@/lib/db";
 import { supabaseClient } from "@/lib/supabaseClient";
 import type { User } from "@supabase/supabase-js";
+import { useNotification } from "@/context/NotificationContext";
 
 export default function FounderDashboardPage() {
   const router = useRouter();
+  const { notify, confirmDialog } = useNotification();
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [stories, setStories] = useState<Story[]>([]);
   const [loadingStories, setLoadingStories] = useState(true);
   const [actionId, setActionId] = useState<string | null>(null);
+  const [avatarError, setAvatarError] = useState(false);
 
   useEffect(() => {
     supabaseClient.auth.getSession().then(({ data: { session } }) => {
@@ -62,19 +65,13 @@ export default function FounderDashboardPage() {
   const loadFounderStories = async (currentUser: User) => {
     setLoadingStories(true);
     try {
-      const userFullName = currentUser.user_metadata?.full_name;
+      const userFullName = currentUser.user_metadata?.full_name || currentUser.email || "";
 
-      let query = supabaseClient.from("stories").select("*");
-
-      if (currentUser.id && userFullName) {
-        query = query.or(`founder_id.eq.${currentUser.id},founder_name.eq.${userFullName}`);
-      } else if (currentUser.id) {
-        query = query.eq("founder_id", currentUser.id);
-      } else if (userFullName) {
-        query = query.eq("founder_name", userFullName);
-      }
-
-      const { data, error } = await query.order("created_at", { ascending: false });
+      const { data, error } = await supabaseClient
+        .from("stories")
+        .select("*")
+        .or(`founder_id.eq.${currentUser.id},founder_name.ilike.%${userFullName}%`)
+        .order("created_at", { ascending: false });
 
       if (!error && data) {
         setStories(data);
@@ -90,12 +87,14 @@ export default function FounderDashboardPage() {
   };
 
   const handleRevokeStory = async (storyId: string) => {
-    if (
-      !confirm(
-        "Are you sure you want to revoke this off-chain story? Media access will be disabled, but the blockchain certificate will remain 100% valid."
-      )
-    )
-      return;
+    const confirmed = await confirmDialog({
+      title: "Revoke Story Media",
+      message:
+        "Are you sure you want to revoke this off-chain story? Media access will be disabled, but the blockchain certificate will remain 100% valid.",
+      confirmText: "Revoke Access",
+      variant: "warning",
+    });
+    if (!confirmed) return;
 
     setActionId(storyId);
     try {
@@ -107,17 +106,53 @@ export default function FounderDashboardPage() {
       setStories((prev) =>
         prev.map((s) => (s.id === storyId ? { ...s, status: "REVOKED" } : s))
       );
+      notify("Story access revoked successfully", "warning");
     } catch (err) {
       console.error("Error revoking story:", err);
+      notify("Failed to revoke story", "error");
     } finally {
       setActionId(null);
     }
   };
 
+  const handleDeleteStory = async (storyId: string) => {
+    const confirmed = await confirmDialog({
+      title: "Permanently Delete Story",
+      message:
+        "Are you sure you want to permanently delete this story? All story records and associated consent data will be removed.",
+      confirmText: "Delete Story",
+      variant: "danger",
+    });
+    if (!confirmed) return;
+
+    setActionId(storyId);
+    try {
+      const res = await fetch("/api/delete-story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storyId }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setStories((prev) => prev.filter((s) => s.id !== storyId));
+        notify("Story permanently deleted from database", "success");
+      } else {
+        console.error("Error deleting story:", data.error);
+        notify(data.error || "Failed to delete story", "error");
+      }
+    } catch (err) {
+      console.error("Error deleting story:", err);
+      notify("Error deleting story", "error");
+    } finally {
+      setActionId(null);
+    }
+  };
 
   const handleSignOut = async () => {
     await supabaseClient.auth.signOut();
     setUser(null);
+    notify("Signed out successfully", "info");
     router.push("/founder");
   };
 
@@ -128,6 +163,7 @@ export default function FounderDashboardPage() {
     const url = `${window.location.origin}/story/${storyId}`;
     navigator.clipboard.writeText(url);
     setCopiedId(storyId);
+    notify("Story link copied to clipboard!", "success");
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -166,27 +202,31 @@ export default function FounderDashboardPage() {
     );
   }
 
+  const userName = user.user_metadata?.full_name || user.email || "";
+  const userInitial = userName ? userName.charAt(0).toUpperCase() : "";
+
   return (
     <div className="min-h-screen bg-slate-950 text-white py-12 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto space-y-8">
         {/* Top Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-900/40 backdrop-blur-md border border-slate-800/80 rounded-3xl p-6 shadow-xl">
           <div className="flex items-center gap-3">
-            {user.user_metadata?.avatar_url ? (
+            {user.user_metadata?.avatar_url && !avatarError ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={user.user_metadata.avatar_url}
                 alt=""
+                onError={() => setAvatarError(true)}
                 className="w-12 h-12 rounded-full border border-slate-700 object-cover"
               />
             ) : (
-              <div className="w-12 h-12 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 flex items-center justify-center">
-                <UserIcon className="w-6 h-6" />
+              <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-extrabold flex items-center justify-center text-lg shadow-lg border border-indigo-400/30">
+                {userInitial || <UserIcon className="w-6 h-6" />}
               </div>
             )}
             <div>
               <h1 className="text-lg font-bold text-white">
-                {user.user_metadata?.full_name || "Dawit Alemu"}
+                {userName}
               </h1>
               <p className="text-xs text-slate-400">{user.email}</p>
             </div>
@@ -339,18 +379,29 @@ export default function FounderDashboardPage() {
                         onClick={() => handleRevokeStory(story.id)}
                         disabled={actionId === story.id}
                         type="button"
-                        className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/20 py-2 px-3 rounded-xl text-xs flex items-center gap-1 transition-colors"
+                        className="bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border border-amber-500/20 py-2 px-3 rounded-xl text-xs flex items-center gap-1 transition-colors"
+                        title="Revoke story media access"
                       >
-                        <Trash2 className="w-3.5 h-3.5" /> Revoke
+                        <Shield className="w-3.5 h-3.5" /> Revoke
                       </button>
                     ) : (
                       <Link
                         href={`/certificate/${story.certificate_id}`}
-                        className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
+                        className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 text-emerald-400 py-2 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
                       >
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Certificate Intact On-Chain
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Certificate Intact
                       </Link>
                     )}
+
+                    <button
+                      onClick={() => handleDeleteStory(story.id)}
+                      disabled={actionId === story.id}
+                      type="button"
+                      className="bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-500/20 py-2 px-3 rounded-xl text-xs flex items-center gap-1 transition-colors"
+                      title="Permanently delete story"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete Story
+                    </button>
                   </div>
                 </div>
               );

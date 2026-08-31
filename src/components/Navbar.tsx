@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ShieldCheck, Plus, QrCode, Grid, Menu, X, Home as HomeIcon, LogIn, LogOut, User as UserIcon, ChevronDown } from "lucide-react";
 import { supabaseClient } from "@/lib/supabaseClient";
 import type { User } from "@supabase/supabase-js";
+import { getURL } from "@/lib/getURL";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -54,7 +55,7 @@ export function Navbar() {
     const { error } = await supabaseClient.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: typeof window !== "undefined" ? window.location.href : undefined,
+        redirectTo: getURL(pathname || "/founder/dashboard"),
       },
     });
     if (error) {
@@ -74,8 +75,11 @@ export function Navbar() {
     return pathname.startsWith(path);
   };
 
+  const [avatarError, setAvatarError] = useState(false);
+
   const userName = user?.user_metadata?.full_name || user?.email || "Account";
   const userAvatar = user?.user_metadata?.avatar_url;
+  const userInitial = userName ? userName.charAt(0).toUpperCase() : "";
 
   return (
     <header className="sticky top-0 z-50 bg-slate-950/85 backdrop-blur-md border-b border-slate-800/80 transition-all">
@@ -134,16 +138,17 @@ export function Navbar() {
                     onClick={() => setUserDropdownOpen(!userDropdownOpen)}
                     className="flex items-center gap-2 bg-slate-900 hover:bg-slate-850 border border-slate-800 p-1.5 pr-2.5 rounded-xl text-xs font-semibold text-white transition-all"
                   >
-                    {userAvatar ? (
+                    {userAvatar && !avatarError ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={userAvatar}
                         alt=""
+                        onError={() => setAvatarError(true)}
                         className="w-6 h-6 rounded-lg object-cover border border-slate-700"
                       />
                     ) : (
-                      <div className="w-6 h-6 rounded-lg bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 flex items-center justify-center text-[11px]">
-                        <UserIcon className="w-3.5 h-3.5" />
+                      <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-bold flex items-center justify-center text-[11px] shadow-sm">
+                        {userInitial || <UserIcon className="w-3.5 h-3.5" />}
                       </div>
                     )}
                     <span className="max-w-[100px] truncate text-[11px] hidden sm:inline">{userName}</span>
@@ -240,12 +245,17 @@ export function Navbar() {
               {user ? (
                 <div className="p-3 bg-slate-900/60 rounded-2xl border border-slate-800 space-y-2">
                   <div className="flex items-center gap-2">
-                    {userAvatar ? (
+                    {userAvatar && !avatarError ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={userAvatar} alt="" className="w-8 h-8 rounded-lg border border-slate-700" />
+                      <img
+                        src={userAvatar}
+                        alt=""
+                        onError={() => setAvatarError(true)}
+                        className="w-8 h-8 rounded-lg border border-slate-700 object-cover"
+                      />
                     ) : (
-                      <div className="w-8 h-8 rounded-lg bg-indigo-600/30 text-indigo-300 flex items-center justify-center">
-                        <UserIcon className="w-4 h-4" />
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-indigo-600 to-violet-500 text-white font-bold flex items-center justify-center text-xs shadow-sm">
+                        {userInitial || <UserIcon className="w-4 h-4" />}
                       </div>
                     )}
                     <div className="truncate">

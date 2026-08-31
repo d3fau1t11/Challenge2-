@@ -1,7 +1,9 @@
 import { db } from "@/lib/db";
 import QRCode from "qrcode";
 import Link from "next/link";
-import { ShieldCheck, Calendar, MapPin, Landmark, Award, EyeOff, ExternalLink, QrCode } from "lucide-react";
+import { ShieldCheck, Calendar, MapPin, Landmark, Award, EyeOff, ExternalLink, QrCode, BookOpen } from "lucide-react";
+
+import { getURL } from "@/lib/getURL";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -31,9 +33,8 @@ export default async function CertificatePage({ params }: PageProps) {
   // Determine story ID (use certificate ID as fallback if no story registered yet)
   const storyId = story ? story.id : id;
 
-  // Resolve application base URL to create absolute path for QR Code
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
-  const storyUrl = `${baseUrl}/story/${storyId}`;
+  // Resolve application base URL dynamically for QR Code across local and production environments
+  const storyUrl = getURL(`/story/${storyId}`);
 
   // Generate QR Code data URL
   let qrCodeDataUrl = "";
@@ -163,19 +164,12 @@ export default async function CertificatePage({ params }: PageProps) {
             </div>
 
             {/* Link buttons */}
-            <div className="w-full space-y-2 relative z-10">
+            <div className="w-full relative z-10">
               <Link
                 href={`/story/${storyId}`}
-                className="w-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold py-3 px-4 rounded-2xl text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-500/20 active:scale-[0.98]"
               >
-                View Story Directly <ExternalLink className="w-3.5 h-3.5" />
-              </Link>
-
-              <Link
-                href="/scan"
-                className="w-full bg-slate-900 hover:bg-slate-850 text-indigo-300 border border-slate-800 font-semibold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <QrCode className="w-3.5 h-3.5 text-indigo-400" /> Open Camera Scanner
+                <BookOpen className="w-4 h-4" /> View Linked Impact Story <ExternalLink className="w-3.5 h-3.5" />
               </Link>
             </div>
 

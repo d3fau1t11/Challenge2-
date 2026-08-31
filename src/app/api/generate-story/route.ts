@@ -22,7 +22,8 @@ export async function POST(req: NextRequest) {
     const duration = Number.isFinite(durationRaw) && durationRaw > 0 ? durationRaw : 15;
 
     const milestone = (formData.get("milestone") as string) || "9 employees";
-    const founderName = (formData.get("founderName") as string) || "Dawit Alemu";
+    const founderName = (formData.get("founderName") as string) || "";
+    const founderEmail = (formData.get("founderEmail") as string) || "";
     const founderId = (formData.get("founderId") as string) || "";
     const visibility = ((formData.get("visibility") as string) || "donor_only") as "public" | "donor_only" | "private";
     const donorName = (formData.get("donorName") as string) || "";
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
     const speechLanguage = (formData.get("language") as string) || (formData.get("speechLanguage") as string) || "om";
 
     const consentDawit = formData.get("consentDawit") === "true";
-    const consentSelam = formData.get("consentSelam") === "true";
+    const consentEmployee = formData.get("consentEmployee") === "true" || formData.get("consentSelam") === "true";
     // Default true when the field is absent so older clients keep working.
     const consentNarration = formData.get("consentNarration") !== "false";
 
@@ -142,6 +143,7 @@ export async function POST(req: NextRequest) {
       certificate_id: cert.id,
       founder_id: founderId,
       founder_name: founderName,
+      founder_email: founderEmail,
       voice_url: voiceUrl,
       video_url: videoItem ? videoItem.url : "",
       media,
@@ -178,14 +180,14 @@ export async function POST(req: NextRequest) {
 
     await db.createConsent({
       story_id: savedStory.id,
-      person_name: "Selam Girma",
+      person_name: "Workshop Employee",
       permissions: {
         funder_page: true,
-        public_page: consentSelam,
-        social_media: consentSelam,
-        sharing: consentSelam,
-        // Selam's consent covers her appearance in the media. Translated
-        // narration is about the founder's words, so it is not her purpose.
+        public_page: consentEmployee,
+        social_media: consentEmployee,
+        sharing: consentEmployee,
+        // Employee consent covers their appearance in the media. Translated
+        // narration is about the founder's words, so it is not their purpose.
         translated_narration: false,
       },
       revoked: false,

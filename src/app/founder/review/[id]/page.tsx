@@ -19,11 +19,13 @@ import {
 } from "lucide-react";
 import { Story, Certificate } from "@/lib/db";
 import { supabaseClient } from "@/lib/supabaseClient";
+import { useNotification } from "@/context/NotificationContext";
 
 export default function ReviewStoryPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
   const storyId = resolvedParams.id;
   const router = useRouter();
+  const { notify, confirmDialog } = useNotification();
 
   const [story, setStory] = useState<Story | null>(null);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
@@ -105,7 +107,17 @@ export default function ReviewStoryPage({ params }: { params: Promise<{ id: stri
   };
 
   const handleRevokeDelete = async () => {
-    if (!story || !confirm("Are you sure you want to revoke this story? Media will be disabled, but the blockchain certificate will remain 100% valid.")) return;
+    if (!story) return;
+
+    const confirmed = await confirmDialog({
+      title: "Revoke Off-Chain Story",
+      message:
+        "Are you sure you want to revoke this story? Media will be disabled, but the blockchain certificate will remain 100% valid.",
+      confirmText: "Revoke Access",
+      variant: "warning",
+    });
+
+    if (!confirmed) return;
     setSaving(true);
 
     try {
@@ -114,9 +126,11 @@ export default function ReviewStoryPage({ params }: { params: Promise<{ id: stri
         .update({ status: "REVOKED", updated_at: new Date().toISOString() })
         .eq("id", story.id);
 
+      notify("Story media access revoked successfully", "warning");
       router.push("/founder/dashboard");
     } catch (err: any) {
       setError(err.message || "Failed to revoke story.");
+      notify("Failed to revoke story", "error");
       setSaving(false);
     }
   };
