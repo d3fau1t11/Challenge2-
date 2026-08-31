@@ -18,7 +18,7 @@ const FALLBACK_STORY =
   "My name is Dawit Alemu. I run a garment workshop in Addis Ababa, Ethiopia. Thanks to the support of our donors, we have grown our workshop and reached our milestone of employing 9 local garment workers. This provides decent wages and stability to 9 families in our community.";
 
 export async function translateWithChatGPT(text: string, targetLanguage: string = "English"): Promise<AiResult> {
-  const rapidApiKey = process.env.RAPIDAPI_CHATGPT_KEY || "4b4352b0e3msh8bb4052d5569861p16fffajsn29304da12b9e";
+  const rapidApiKey = process.env.RAPIDAPI_CHATGPT_KEY;
   try {
     console.log(`Calling ChatGPT API (RapidAPI) for translation to ${targetLanguage}...`);
     const prompt = `Translate the following text into ${targetLanguage}. Return ONLY the translation, no commentary or intro.\n\nText: "${text}"`;
