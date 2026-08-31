@@ -4,7 +4,7 @@
 // row shape. Nothing in here touches the certificate or the chain.
 
 import { db, Consent, Narration, Story } from "@/lib/db";
-import { addisai, splitTextToCaptions } from "@/lib/addisai";
+import { addisai, splitTextToCaptions, translateWithChatGPT } from "@/lib/addisai";
 import { synthesize, voiceIdFor, MAX_TTS_CHARS, Caption } from "@/lib/elevenlabs";
 
 export type NarrationLang = "en" | "de";
@@ -40,8 +40,8 @@ export function narrationAllowed(consents: Consent[], founderName: string): bool
  * Where the text comes from, in tiers, each reporting honestly whether it ran.
  *
  *  en          — story.generated_story. Already in the row, zero extra calls.
- *  de tier 1   — Addis AI translate am → de, from Dawit's ACTUAL words.
- *  de tier 2   — Addis AI chat_generate translating the polished English.
+ *  de tier 1   — ChatGPT translation of English story → German.
+ *  de tier 2   — Addis AI translate/chat translating English or transcript → German.
  *  de tier 3   — canned paragraph, marked as a fallback.
  */
 async function resolveText(
@@ -58,20 +58,26 @@ async function resolveText(
     return { text: CANNED.en, source: "fallback" };
   }
 
-  // German, tier 1: straight from the Amharic transcript.
-  if (story.amharic_transcript) {
-    const t1 = await addisai.translateTo(story.amharic_transcript, "am", "de");
-    if (t1.live && t1.text.trim()) {
-      return { text: t1.text.trim(), source: "live" };
-    }
-  }
-
-  // German, tier 2: translate the polished English via the chat endpoint.
+  // German, tier 1: ChatGPT translation of English text to German.
   const english = (story.generated_story || story.english_translation || "").trim();
   if (english) {
+    const chatGptRes = await translateWithChatGPT(english, "German");
+    if (chatGptRes.live && chatGptRes.text.trim()) {
+      return { text: chatGptRes.text.trim(), source: "live" };
+    }
+
+    // Secondary fallback: Addis AI chat endpoint
     const t2 = await addisai.translateViaChat(english, "German");
     if (t2.live && t2.text.trim()) {
       return { text: t2.text.trim(), source: "live" };
+    }
+  }
+
+  // German, tier 2: direct from the input transcript to German via Addis AI.
+  if (story.amharic_transcript) {
+    const t1 = await addisai.translateTo(story.amharic_transcript, "om", "de");
+    if (t1.live && t1.text.trim()) {
+      return { text: t1.text.trim(), source: "live" };
     }
   }
 

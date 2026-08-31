@@ -19,6 +19,10 @@ const FALLBACK_STORY =
 
 export async function translateWithChatGPT(text: string, targetLanguage: string = "English"): Promise<AiResult> {
   const rapidApiKey = process.env.RAPIDAPI_CHATGPT_KEY;
+  if (!rapidApiKey) {
+    console.warn("RAPIDAPI_CHATGPT_KEY is not set. Falling back to secondary translation.");
+    return { text: "", live: false };
+  }
   try {
     console.log(`Calling ChatGPT API (RapidAPI) for translation to ${targetLanguage}...`);
     const prompt = `Translate the following text into ${targetLanguage}. Return ONLY the translation, no commentary or intro.\n\nText: "${text}"`;
@@ -58,12 +62,12 @@ export async function translateWithChatGPT(text: string, targetLanguage: string 
 
 export const addisai = {
   /**
-   * Speech-to-text: Amharic or Afaan Oromo voice note to text
+   * Speech-to-text: Voice note to text (defaults to Afaan Oromo 'om')
    */
   transcribe: async (
     audioBuffer: Buffer,
     mimeType: string,
-    languageCode: string = "am"
+    languageCode: string = "om"
   ): Promise<AiResult> => {
     const apiKey = process.env.ADDIS_AI_API_KEY;
     if (!apiKey) {
@@ -106,9 +110,9 @@ export const addisai = {
   },
 
   /**
-   * Translate Amharic text to English
+   * Translate text to English (source language defaults to 'om')
    */
-  translate: async (text: string, sourceLanguage: string = "am"): Promise<AiResult> => {
+  translate: async (text: string, sourceLanguage: string = "om"): Promise<AiResult> => {
     // Primary: ChatGPT API via RapidAPI
     const chatGptRes = await translateWithChatGPT(text, "English");
     if (chatGptRes.live && chatGptRes.text) {
