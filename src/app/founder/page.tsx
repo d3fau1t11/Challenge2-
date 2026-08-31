@@ -424,7 +424,7 @@ export default function FounderPage() {
             <Shield className="w-3.5 h-3.5" /> Off-Chain Storytelling Layer
           </div>
           <h1 className="text-3xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-white via-indigo-200 to-indigo-400">
-            ታሪክዎን ያጋሩ
+            Share Your Story
           </h1>
           <p className="text-slate-400 text-sm leading-relaxed">
             Upload a voice note and a few photos of the workshop. We turn it into a story that
